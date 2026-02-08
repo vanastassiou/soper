@@ -87,12 +87,11 @@ export function renderItemRow(config, index, options = {}) {
     let weightCell = '';
     if (showWeight) {
         const isWeightInput = inputType === 'weight';
-        const disabledAttr = isWeightInput && isLocked && lockableField === 'weight' ? 'disabled' : '';
         const lockBtn = renderLockButton('weight');
 
         if (isWeightInput) {
             weightCell = `<div class="weight-cell">
-                   <input type="number" value="${weight}" min="0" step="1" data-action="weight" data-index="${index}" aria-label="${name} weight in ${unit}" ${disabledAttr}>
+                   <input type="number" value="${weight}" min="0" step="1" data-action="weight" data-index="${index}" aria-label="${name} weight in ${unit}">
                    <span class="unit-label">${unit}</span>
                    ${lockBtn}
                </div>`;
@@ -100,6 +99,7 @@ export function renderItemRow(config, index, options = {}) {
             // Display-only weight (calculated from percentage)
             weightCell = `<div class="weight-cell">
                    <span class="${itemType}-weight" aria-label="${name} weight">${weight} ${unit}</span>
+                   ${lockBtn}
                </div>`;
         }
     }

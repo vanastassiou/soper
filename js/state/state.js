@@ -136,8 +136,8 @@ function adjustIndicesAfterRemoval(locksSet, removedIndex) {
 
 export const state = createReactiveState({
     // Recipe state (Select fats mode - percentage-based input)
-    recipe: [],              // Array of {id, percentage}
-    recipeLocks: new Set(),  // Set of indices with locked percentages
+    recipe: [],              // Array of {id, percentage, lockedWeight?}
+    recipeLocks: new Set(),  // Set of indices with locked weights
 
     recipeAdditives: [],     // Array of {id, weight}
 
@@ -221,8 +221,49 @@ export function updateFatPercentage(index, percentage) {
     state.recipe = newRecipe;
 }
 
-/** Toggle lock on a recipe fat (locks percentage) */
+/** Toggle lock on a recipe fat (legacy - kept for YOLO/Properties compatibility) */
 export const toggleRecipeLock = createToggleLock('recipeLocks');
+
+/**
+ * Lock a recipe fat's weight (sets lockedWeight on the recipe item)
+ * @param {number} index - Fat index
+ * @param {number} weight - Weight to lock at
+ */
+export function lockFatWeight(index, weight) {
+    const newRecipe = [...state.recipe];
+    newRecipe[index] = { ...newRecipe[index], lockedWeight: weight };
+    state.recipe = newRecipe;
+
+    const newLocks = new Set(state.recipeLocks);
+    newLocks.add(index);
+    state.recipeLocks = newLocks;
+}
+
+/**
+ * Unlock a recipe fat's weight (removes lockedWeight from the recipe item)
+ * @param {number} index - Fat index
+ */
+export function unlockFatWeight(index) {
+    const newRecipe = [...state.recipe];
+    const { lockedWeight: _, ...rest } = newRecipe[index];
+    newRecipe[index] = rest;
+    state.recipe = newRecipe;
+
+    const newLocks = new Set(state.recipeLocks);
+    newLocks.delete(index);
+    state.recipeLocks = newLocks;
+}
+
+/**
+ * Update a locked recipe fat's weight
+ * @param {number} index - Fat index
+ * @param {number} weight - New weight
+ */
+export function updateLockedWeight(index, weight) {
+    const newRecipe = [...state.recipe];
+    newRecipe[index] = { ...newRecipe[index], lockedWeight: parseFloat(weight) || 0 };
+    state.recipe = newRecipe;
+}
 
 /**
  * Clear the entire recipe
@@ -508,7 +549,7 @@ const STORAGE_KEY = 'soapCalculatorState';
 export function saveState() {
     try {
         const dataToSave = {
-            version: 2, // Track format version for migration
+            version: 3, // Track format version for migration
             recipe: state.recipe,
             recipeLocks: Array.from(state.recipeLocks),
             excludedFats: state.excludedFats,
@@ -565,11 +606,16 @@ export function restoreState() {
             }
 
             // Handle locks - migrate old names to new
-            if (Array.isArray(data.recipeLocks)) {
+            // v3 changed lock semantics from percentage to weight, so clear locks from v2
+            if (data.version >= 3 && Array.isArray(data.recipeLocks)) {
                 state.recipeLocks = new Set(data.recipeLocks);
-            } else if (Array.isArray(data.percentageLocks)) {
-                // Migrate old percentageLocks to recipeLocks
-                state.recipeLocks = new Set(data.percentageLocks);
+            } else {
+                // v2 or earlier: clear locks (semantics changed)
+                state.recipeLocks = new Set();
+                // Also strip any stale lockedWeight from recipe items
+                if (state.recipe.length > 0) {
+                    state.recipe = state.recipe.map(({ lockedWeight: _, ...rest }) => rest);
+                }
             }
 
             if (Array.isArray(data.excludedFats)) {

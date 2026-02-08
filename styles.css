@@ -858,6 +858,11 @@ input:focus, select:focus {
     border-color: var(--danger);
 }
 
+/* Warning text in totals row when percentage doesn't sum to 100% */
+.percentage-warning {
+    color: var(--warning);
+}
+
 /* Mobile responsive item rows */
 @media (max-width: 500px) {
     .item-row,

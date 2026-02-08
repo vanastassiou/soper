@@ -14,6 +14,7 @@ import {
     removeFatFromRecipe, removeYoloFat, restoreState, saveState,
     setYoloRecipe, state, toggleRecipeLock, updateFatPercentage,
     toggleYoloLock, updateAdditiveWeight, getTotalPercentage,
+    lockFatWeight, unlockFatWeight, updateLockedWeight,
     // Properties mode state functions
     setPropertiesRecipe, togglePropertiesLock, getPropertiesLockedFats, clearPropertiesRecipe,
     // Cupboard cleaner state functions
@@ -173,13 +174,15 @@ function calculate() {
 function renderRecipeList() {
     const container = $(ELEMENT_IDS.recipeFats);
     const useFatsAction = $(ELEMENT_IDS.useFatsAction);
+    const settings = ui.getSettings();
 
     ui.renderRecipe(container, state.recipe, state.recipeLocks, state.fatsDatabase, {
         onPercentageChange: handlePercentageChange,
+        onWeightChange: handleRecipeWeightCellChange,
         onToggleLock: handleToggleRecipeLock,
         onRemove: handleRemoveFat,
         onFatInfo: createFatInfoHandler(() => state.recipe)
-    });
+    }, settings.recipeWeight, getWeightLabel(settings.unit));
 
     // Show/hide "Use these fats" button based on recipe content
     setVisibility(useFatsAction, state.recipe.length > 0);
@@ -271,8 +274,50 @@ function handlePercentageChange(index, percentage) {
 }
 
 function handleToggleRecipeLock(index) {
-    toggleRecipeLock(index);
+    if (state.recipeLocks.has(index)) {
+        unlockFatWeight(index);
+    } else {
+        const settings = ui.getSettings();
+        const weight = settings.recipeWeight * state.recipe[index].percentage / 100;
+        lockFatWeight(index, weight);
+    }
     renderRecipeList();
+}
+
+function handleRecipeWeightCellChange(index, value) {
+    const weight = parseFloat(value) || 0;
+    updateLockedWeight(index, weight);
+    // Recalculate percentage from locked weight
+    const settings = ui.getSettings();
+    const recipeWeight = settings.recipeWeight;
+    const newPercentage = recipeWeight > 0 ? (weight / recipeWeight) * 100 : 0;
+    updateFatPercentage(index, newPercentage);
+    calculate();
+}
+
+function handleRecipeWeightSettingChange() {
+    const settings = ui.getSettings();
+    const newRecipeWeight = settings.recipeWeight;
+
+    // Recalculate percentages for locked fats (their weight stays fixed)
+    if (state.recipeLocks.size > 0 && newRecipeWeight > 0) {
+        const newRecipe = [...state.recipe];
+        let changed = false;
+        for (const lockedIndex of state.recipeLocks) {
+            const fat = newRecipe[lockedIndex];
+            if (fat?.lockedWeight != null) {
+                const newPercentage = (fat.lockedWeight / newRecipeWeight) * 100;
+                newRecipe[lockedIndex] = { ...fat, percentage: newPercentage };
+                changed = true;
+            }
+        }
+        if (changed) {
+            state.recipe = newRecipe;
+        }
+    }
+
+    renderRecipeList();
+    calculate();
 }
 
 function handleStartOver() {
@@ -407,21 +452,38 @@ function handleUnitChange() {
     if (recipeWeightInput && previousUnit !== newUnit) {
         const currentWeight = parseFloat(recipeWeightInput.value) || 0;
         let convertedWeight;
+        let conversionFactor = 1;
 
         if (previousUnit === 'metric' && newUnit === 'imperial') {
             // Grams to ounces
-            convertedWeight = currentWeight / VOLUME.G_PER_OZ;
+            conversionFactor = 1 / VOLUME.G_PER_OZ;
         } else if (previousUnit === 'imperial' && newUnit === 'metric') {
             // Ounces to grams
-            convertedWeight = currentWeight * VOLUME.G_PER_OZ;
-        } else {
-            convertedWeight = currentWeight;
+            conversionFactor = VOLUME.G_PER_OZ;
         }
+
+        convertedWeight = currentWeight * conversionFactor;
 
         // Round to reasonable precision
         recipeWeightInput.value = newUnit === 'imperial'
             ? convertedWeight.toFixed(1)
             : Math.round(convertedWeight);
+
+        // Convert locked weights in recipe items
+        if (conversionFactor !== 1 && state.recipeLocks.size > 0) {
+            const newRecipe = [...state.recipe];
+            let changed = false;
+            for (const lockedIndex of state.recipeLocks) {
+                const fat = newRecipe[lockedIndex];
+                if (fat?.lockedWeight != null) {
+                    newRecipe[lockedIndex] = { ...fat, lockedWeight: fat.lockedWeight * conversionFactor };
+                    changed = true;
+                }
+            }
+            if (changed) {
+                state.recipe = newRecipe;
+            }
+        }
     }
 
     previousUnit = newUnit;
@@ -904,6 +966,7 @@ function setupSettingsListeners() {
     $(ELEMENT_IDS.superfat).addEventListener('input', calculate);
     $(ELEMENT_IDS.waterRatio).addEventListener('input', calculate);
     $(ELEMENT_IDS.unit).addEventListener('change', handleUnitChange);
+    $(ELEMENT_IDS.recipeWeight)?.addEventListener('input', handleRecipeWeightSettingChange);
 
     // Dietary filter checkboxes - update all ingredient selects when toggled
     const handleDietaryFilterChange = () => {

@@ -66,14 +66,16 @@ export function populateFatSelect(selectElement, fatsDatabase, excludeIds = [], 
 // ============================================
 
 /**
- * Render the recipe fats list (Select fats mode - percentage input)
+ * Render the recipe fats list (Select fats mode - weight-lockable)
  * @param {HTMLElement} container - Container element
- * @param {Array} recipe - Array of {id, percentage}
+ * @param {Array} recipe - Array of {id, percentage, lockedWeight?}
  * @param {Set} locks - Set of locked indices
  * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {Object} callbacks - {onPercentageChange, onToggleLock, onRemove, onFatInfo}
+ * @param {Object} callbacks - {onPercentageChange, onWeightChange, onToggleLock, onRemove, onFatInfo}
+ * @param {number} recipeWeight - Total recipe weight from settings
+ * @param {string} unit - Unit label (g or oz)
  */
-export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks) {
+export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks, recipeWeight, unit) {
     const signal = setupAbortSignal(container);
 
     if (recipe.length === 0) {
@@ -82,28 +84,44 @@ export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks) 
     }
 
     const totalPercentage = recipe.reduce((sum, fat) => sum + fat.percentage, 0);
+    const totalWeight = recipeWeight * totalPercentage / 100;
 
     const rows = recipe.map((fat, i) => {
         const fatData = fatsDatabase[fat.id];
+        const isLocked = locks.has(i);
+        const derivedWeight = recipeWeight * fat.percentage / 100;
+        const displayWeight = isLocked && fat.lockedWeight != null
+            ? parseFloat(fat.lockedWeight.toFixed(1))
+            : parseFloat(derivedWeight.toFixed(1));
+
+        // Format percentage for display when locked (derived from weight)
+        const displayPercentage = isLocked
+            ? parseFloat(fat.percentage.toFixed(1))
+            : fat.percentage;
+
         return renderItemRow({
             id: fat.id,
             name: fatData?.name || fat.id,
-            percentage: fat.percentage,
-            isLocked: locks.has(i)
+            weight: displayWeight,
+            percentage: displayPercentage,
+            isLocked
         }, i, {
-            inputType: 'percentage',
-            showWeight: false,
+            inputType: isLocked ? 'weight' : 'percentage',
+            showWeight: true,
             showPercentage: true,
-            lockableField: 'percentage',
-            itemType: 'fat'
+            lockableField: 'weight',
+            itemType: 'fat',
+            unit
         });
     }).join('');
 
-    // Show total percentage (should be 100%)
+    // Show totals with both weight and percentage
+    const percentWarning = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
     const totalsRow = `
         <div class="totals-row">
             <span>Total</span>
-            <span class="${Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : ''}">${totalPercentage.toFixed(1)}%</span>
+            <span>${totalWeight.toFixed(1)} ${unit}</span>
+            <span class="${percentWarning}">${totalPercentage.toFixed(1)}%</span>
             <span></span>
         </div>
     `;
@@ -113,6 +131,7 @@ export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks) 
     // Attach event handlers with abort signal for cleanup
     attachRowEventHandlersWithSignal(container, {
         onPercentageChange: callbacks.onPercentageChange,
+        onWeightChange: callbacks.onWeightChange,
         onToggleLock: callbacks.onToggleLock,
         onRemove: callbacks.onRemove,
         onInfo: callbacks.onFatInfo
