@@ -270,6 +270,8 @@ function handleRemoveFat(index) {
 
 function handlePercentageChange(index, percentage) {
     updateFatPercentage(index, percentage);
+    // Update derived weight displays without re-rendering (user is typing)
+    updateRecipeDerivedDisplays(ui.getSettings());
     calculate();
 }
 
@@ -281,6 +283,7 @@ function handleToggleRecipeLock(index) {
         const weight = settings.recipeWeight * state.recipe[index].percentage / 100;
         lockFatWeight(index, weight);
     }
+    redistributeUnlockedPercentages();
     renderRecipeList();
 }
 
@@ -292,7 +295,99 @@ function handleRecipeWeightCellChange(index, value) {
     const recipeWeight = settings.recipeWeight;
     const newPercentage = recipeWeight > 0 ? (weight / recipeWeight) * 100 : 0;
     updateFatPercentage(index, newPercentage);
+
+    redistributeUnlockedPercentages();
+    // Update DOM directly (can't re-render — user is typing in the input)
+    updateRecipeDerivedDisplays(settings);
     calculate();
+}
+
+/**
+ * Scale unlocked fats proportionally so total percentage = 100%.
+ * Locked fats' percentages are derived from their weight and stay fixed.
+ */
+function redistributeUnlockedPercentages() {
+    if (state.recipeLocks.size === 0) return;
+
+    const settings = ui.getSettings();
+    const recipeWeight = settings.recipeWeight;
+    if (recipeWeight <= 0) return;
+
+    // Sum locked percentages (derived from locked weights)
+    let totalLockedPct = 0;
+    for (const i of state.recipeLocks) {
+        totalLockedPct += state.recipe[i].percentage;
+    }
+
+    const remainingPct = 100 - totalLockedPct;
+
+    // Sum current unlocked percentages
+    let totalUnlockedPct = 0;
+    state.recipe.forEach((fat, i) => {
+        if (!state.recipeLocks.has(i)) totalUnlockedPct += fat.percentage;
+    });
+
+    // Nothing to scale
+    if (totalUnlockedPct === 0 || Math.abs(totalUnlockedPct - remainingPct) < 0.01) return;
+
+    const scale = remainingPct > 0 ? remainingPct / totalUnlockedPct : 0;
+
+    const newRecipe = [...state.recipe];
+    newRecipe.forEach((fat, i) => {
+        if (!state.recipeLocks.has(i)) {
+            newRecipe[i] = { ...fat, percentage: fat.percentage * scale };
+        }
+    });
+    state.recipe = newRecipe;
+}
+
+/**
+ * Update derived display values (percentage spans, weights, totals) without
+ * re-rendering. Called when the user is actively typing in an input.
+ */
+function updateRecipeDerivedDisplays(settings) {
+    const container = $(ELEMENT_IDS.recipeFats);
+    if (!container) return;
+
+    const recipeWeight = settings.recipeWeight;
+    const unit = getWeightLabel(settings.unit);
+
+    // Update each row's display-only percentage or weight span
+    state.recipe.forEach((fat, i) => {
+        const row = container.querySelector(`.item-row[data-index="${i}"]`);
+        if (!row) return;
+
+        const isLocked = state.recipeLocks.has(i);
+        if (isLocked) {
+            // Locked row: percentage span is display-only, update it
+            const pctSpan = row.querySelector('.percentage-cell .item-percentage');
+            if (pctSpan) pctSpan.textContent = `${fat.percentage.toFixed(1)}%`;
+        } else {
+            // Unlocked row: update both display-only weight AND percentage input
+            const weightSpan = row.querySelector('.weight-cell .fat-weight');
+            if (weightSpan) {
+                const derivedWeight = (recipeWeight * fat.percentage / 100).toFixed(1);
+                weightSpan.textContent = `${derivedWeight} ${unit}`;
+            }
+            const pctInput = row.querySelector('input[data-action="percentage"]');
+            if (pctInput && pctInput !== document.activeElement) {
+                pctInput.value = parseFloat(fat.percentage.toFixed(1));
+            }
+        }
+    });
+
+    // Update totals row
+    const totalsRow = container.querySelector('.totals-row');
+    if (totalsRow) {
+        const totalPercentage = state.recipe.reduce((sum, f) => sum + f.percentage, 0);
+        const totalWeight = recipeWeight * totalPercentage / 100;
+        const spans = totalsRow.querySelectorAll('span');
+        if (spans[1]) spans[1].textContent = `${totalWeight.toFixed(1)} ${unit}`;
+        if (spans[2]) {
+            spans[2].textContent = `${totalPercentage.toFixed(1)}%`;
+            spans[2].className = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
+        }
+    }
 }
 
 function handleRecipeWeightSettingChange() {
@@ -302,18 +397,14 @@ function handleRecipeWeightSettingChange() {
     // Recalculate percentages for locked fats (their weight stays fixed)
     if (state.recipeLocks.size > 0 && newRecipeWeight > 0) {
         const newRecipe = [...state.recipe];
-        let changed = false;
         for (const lockedIndex of state.recipeLocks) {
             const fat = newRecipe[lockedIndex];
             if (fat?.lockedWeight != null) {
-                const newPercentage = (fat.lockedWeight / newRecipeWeight) * 100;
-                newRecipe[lockedIndex] = { ...fat, percentage: newPercentage };
-                changed = true;
+                newRecipe[lockedIndex] = { ...fat, percentage: (fat.lockedWeight / newRecipeWeight) * 100 };
             }
         }
-        if (changed) {
-            state.recipe = newRecipe;
-        }
+        state.recipe = newRecipe;
+        redistributeUnlockedPercentages();
     }
 
     renderRecipeList();
