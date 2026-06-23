@@ -1,6 +1,4 @@
-# Soapmaker recipe generator
-
-A web app for soap makers to calculate lye amounts, water ratios, and analyze soap properties based on selected fats/oils.
+# Soper
 
 <!-- toc -->
 
