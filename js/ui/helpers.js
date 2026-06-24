@@ -118,14 +118,15 @@ export function setupAbortSignal(container) {
  * @param {string} selector - CSS selector for target elements
  * @param {string} eventType - Event type (e.g., 'click', 'input')
  * @param {Function} handler - Event handler (receives event and matched element)
+ * @param {Object} [options] - addEventListener options (e.g., { signal } for cleanup)
  */
-export function delegate(container, selector, eventType, handler) {
+export function delegate(container, selector, eventType, handler, options) {
     container.addEventListener(eventType, (e) => {
         const target = e.target.closest(selector);
         if (target && container.contains(target)) {
             handler(e, target);
         }
-    });
+    }, options);
 }
 
 /**

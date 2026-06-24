@@ -55,3 +55,20 @@ export function enrichWithReferences(item, sources) {
         resolvedReferences: resolveReferences(item.references, sources)
     };
 }
+
+/**
+ * Render a list of references as the standard entry-card footer.
+ * Returns an empty string if there are no references.
+ */
+export function renderReferencesHtml(references, sources) {
+    if (!references || references.length === 0) return '';
+    const refs = resolveReferences(references, sources);
+    return `
+        <div class="entry-references">
+            <span class="references-label">References:</span>
+            ${refs.map(ref => `
+                <a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="reference-link">${ref.source}</a>
+            `).join('')}
+        </div>
+    `;
+}

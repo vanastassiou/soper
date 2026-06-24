@@ -5,7 +5,7 @@
 
 import { $ } from '../../../js/ui/helpers.js';
 import { TIMING } from '../../../js/lib/constants.js';
-import { resolveReferences } from '../../../js/lib/references.js';
+import { renderReferencesHtml } from '../../../js/lib/references.js';
 
 let processesData = {};
 let sourcesData = {};
@@ -24,19 +24,6 @@ async function loadProcesses() {
     glossaryData = await glossaryResponse.json();
     equipmentData = await equipmentResponse.json();
     renderProcesses();
-}
-
-function renderReferencesHtml(references) {
-    if (!references || references.length === 0) return '';
-    const refs = resolveReferences(references, sourcesData);
-    return `
-        <div class="entry-references">
-            <span class="references-label">References:</span>
-            ${refs.map(ref => `
-                <a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="reference-link">${ref.source}</a>
-            `).join('')}
-        </div>
-    `;
 }
 
 function renderProcesses() {
@@ -150,7 +137,7 @@ function renderProcesses() {
                 </div>
             ` : ''}
 
-            ${renderReferencesHtml(data.references)}
+            ${renderReferencesHtml(data.references, sourcesData)}
         </article>
     `).join('');
 }
