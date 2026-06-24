@@ -3,7 +3,7 @@
  * Aggregates citations from all data files and displays grouped by publication
  */
 
-import { $ } from './ui/helpers.js';
+import { $ } from '../../js/ui/helpers.js';
 
 let publicationIndex = {};
 let sourcesData = {};
