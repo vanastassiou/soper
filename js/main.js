@@ -17,17 +17,20 @@ import {
     lockFatWeight, unlockFatWeight, updateLockedWeight,
     // Properties mode state functions
     setPropertiesRecipe, togglePropertiesLock, getPropertiesLockedFats, clearPropertiesRecipe,
-    // Cupboard cleaner state functions
-    addCupboardFat, removeCupboardFat, updateCupboardFatWeight,
-    toggleCupboardLock, setCupboardSuggestions,
-    removeCupboardSuggestion, updateCupboardSuggestionWeight, setAllowRatioMode,
     // Suggestion exclusion functions
     addSuggestionExclusion, clearSuggestionExclusions
 } from './state/state.js';
 import { attachRowEventHandlers, renderItemRow } from './ui/components/itemRow.js';
 import { toast } from './ui/components/toast.js';
 import { $, enableTabArrowNavigation, setVisibility } from './ui/helpers.js';
+import { applyPropertyUpdates, updatePropertiesFromFats } from './ui/properties.js';
 import * as ui from './ui/ui.js';
+import {
+    initCupboard,
+    renderCupboardFatsList,
+    renderCupboardSuggestionsList,
+    resetCupboardMode
+} from './features/cupboard/index.js';
 
 // ============================================
 // Shared Handlers
@@ -46,17 +49,6 @@ function createFatInfoHandler(getRecipe) {
             });
         }
     };
-}
-
-/**
- * Update all property displays with values from a properties object
- * @param {Object} properties - Object with property values (hardness, degreasing, etc.)
- */
-function applyPropertyUpdates(properties) {
-    PROPERTY_KEYS.forEach(key => {
-        const range = PROPERTY_RANGES[key];
-        ui.updateProperty(key, properties[key], range.min, range.max);
-    });
 }
 
 // ============================================
@@ -957,16 +949,7 @@ function clearModeData(mode) {
         case 'cupboard':
             clearCupboardFats();
             clearSuggestionExclusions();
-            renderCupboardFatsList();
-            renderCupboardSuggestionsList();
-            // Reset select options
-            const cupboardSelect = $(ELEMENT_IDS.cupboardFatSelect);
-            if (cupboardSelect) {
-                ui.populateCupboardFatSelect(cupboardSelect, state.fatsDatabase, []);
-            }
-            // Reset button text
-            const cupboardBtn = $(ELEMENT_IDS.cupboardCleanerBtn);
-            if (cupboardBtn) cupboardBtn.textContent = 'Get suggestions';
+            resetCupboardMode();
             break;
     }
     calculate();
@@ -1024,9 +1007,9 @@ function updatePropertiesForMode(mode) {
                     id: f.id,
                     weight: f.percentage  // Use percentage as weight (total=100%)
                 }));
-                updatePropertiesFromFats(recipeAsWeights);
+                updatePropertiesFromFats(recipeAsWeights, state.fatsDatabase);
             } else {
-                updatePropertiesFromFats([]);
+                updatePropertiesFromFats([], state.fatsDatabase);
             }
             break;
         case 'yolo':
@@ -1036,14 +1019,14 @@ function updatePropertiesForMode(mode) {
                     id: f.id,
                     weight: f.percentage
                 }));
-                updatePropertiesFromFats(yoloFatsAsWeights);
+                updatePropertiesFromFats(yoloFatsAsWeights, state.fatsDatabase);
             } else {
-                updatePropertiesFromFats([]);
+                updatePropertiesFromFats([], state.fatsDatabase);
             }
             break;
         case 'cupboard':
             // Use cupboard fats + suggestions (already weight-based)
-            updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
+            updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions], state.fatsDatabase);
             break;
     }
 }
@@ -1242,7 +1225,7 @@ function renderYoloRecipe() {
         container.innerHTML = '';
         setVisibility(useAction, false);
         // Clear properties display
-        updatePropertiesFromFats([]);
+        updatePropertiesFromFats([], state.fatsDatabase);
         return;
     }
 
@@ -1251,7 +1234,7 @@ function renderYoloRecipe() {
         id: f.id,
         weight: f.percentage // Use percentage as weight (total=100)
     }));
-    updatePropertiesFromFats(yoloFatsAsWeights);
+    updatePropertiesFromFats(yoloFatsAsWeights, state.fatsDatabase);
 
     // Show the "Use This Recipe" action
     setVisibility(useAction, true);
@@ -1324,219 +1307,6 @@ function handleUseYoloRecipe() {
     calculate();
 
     $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
-}
-
-// ============================================
-// Cupboard Cleaner Handlers
-// ============================================
-
-function setupCupboardCleanerHandlers() {
-    const cupboardSelect = $(ELEMENT_IDS.cupboardFatSelect);
-    if (cupboardSelect) {
-        ui.populateCupboardFatSelect(cupboardSelect, state.fatsDatabase, state.cupboardFats.map(f => f.id));
-    }
-
-    $(ELEMENT_IDS.addCupboardFatBtn)?.addEventListener('click', handleAddCupboardFat);
-    $(ELEMENT_IDS.cupboardCleanerBtn)?.addEventListener('click', handleGetCupboardSuggestions);
-    $(ELEMENT_IDS.useCupboardBtn)?.addEventListener('click', handleUseCupboardRecipe);
-    $(ELEMENT_IDS.allowRatioSuggestions)?.addEventListener('change', handleRatioModeToggle);
-
-    // Render initial state if cupboard has fats from localStorage
-    if (state.cupboardFats.length > 0) {
-        renderCupboardFatsList();
-    }
-    if (state.cupboardSuggestions.length > 0) {
-        renderCupboardSuggestionsList();
-    }
-}
-
-function handleAddCupboardFat() {
-    const select = $(ELEMENT_IDS.cupboardFatSelect);
-    const fatId = select?.value;
-    if (!fatId) return;
-
-    if (!addCupboardFat(fatId)) {
-        toast.info(UI_MESSAGES.FAT_ALREADY_EXISTS);
-        return;
-    }
-
-    // Reset select and update options
-    select.value = '';
-    ui.populateCupboardFatSelect(select, state.fatsDatabase, state.cupboardFats.map(f => f.id));
-
-    // Re-render the fat list
-    renderCupboardFatsList();
-}
-
-function handleCupboardWeightChange(index, value) {
-    updateCupboardFatWeight(index, value);
-    updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
-}
-
-function handleRemoveCupboardFat(index) {
-    removeCupboardFat(index);
-
-    const select = $(ELEMENT_IDS.cupboardFatSelect);
-    if (select) {
-        ui.populateCupboardFatSelect(select, state.fatsDatabase, state.cupboardFats.map(f => f.id));
-    }
-
-    // Re-render the fat list and update preview
-    renderCupboardFatsList();
-}
-
-function handleGetCupboardSuggestions() {
-    if (state.cupboardFats.length === 0) {
-        toast.info(UI_MESSAGES.NO_CUPBOARD_FATS);
-        return;
-    }
-
-    const excludedFats = getCombinedExclusions();
-
-    const result = optimizer.suggestFatsForCupboard(state.cupboardFats, state.fatsDatabase, {
-        excludeFats: excludedFats,
-        maxSuggestions: 3,
-        allowRatioAdjustments: state.allowRatioMode
-    });
-
-    if (result.allInRange && result.suggestions.length === 0) {
-        toast.success(UI_MESSAGES.CUPBOARD_PROPERTIES_OK);
-        updatePropertiesFromFats(state.cupboardFats);
-        return;
-    }
-
-    if (result.suggestions.length === 0) {
-        toast.warning(UI_MESSAGES.CUPBOARD_SUGGESTION_FAILED);
-        return;
-    }
-
-    setCupboardSuggestions(result.suggestions);
-    renderCupboardSuggestionsList();
-    updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
-
-    // Show the "Use" button
-    setVisibility($(ELEMENT_IDS.useCupboardAction), true);
-
-    // Change button text to "Re-roll" after first generation
-    const cupboardBtn = $(ELEMENT_IDS.cupboardCleanerBtn);
-    if (cupboardBtn) cupboardBtn.textContent = 'Re-roll';
-}
-
-function handleRemoveCupboardSuggestion(index) {
-    removeCupboardSuggestion(index);
-    renderCupboardSuggestionsList();
-    updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
-}
-
-function handleCupboardSuggestionWeightChange(index, value) {
-    updateCupboardSuggestionWeight(index, value);
-    updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
-}
-
-function handleUseCupboardRecipe() {
-    if (state.cupboardFats.length === 0) return;
-
-    // Combine cupboard fats and suggestions, then convert weights to percentages
-    const allFats = [
-        ...state.cupboardFats.map(f => ({ id: f.id, weight: f.weight })),
-        ...state.cupboardSuggestions.map(s => ({ id: s.id, weight: s.weight }))
-    ];
-    const totalWeight = allFats.reduce((sum, f) => sum + f.weight, 0);
-
-    state.recipe = allFats.map(f => ({
-        id: f.id,
-        percentage: totalWeight > 0 ? Math.round((f.weight / totalWeight) * 1000) / 10 : 0
-    }));
-    state.recipeLocks = new Set();
-
-    // Clear cupboard state since we're transferring the recipe
-    clearCupboardFats();
-
-    switchBuildMode('fats', true); // Skip warning - intentionally transferring recipe
-    renderRecipeList();
-    updateFatSelectWithFilters();
-    calculate();
-
-    $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
-}
-
-function handleRatioModeToggle() {
-    const checkbox = $(ELEMENT_IDS.allowRatioSuggestions);
-    setAllowRatioMode(checkbox?.checked || false);
-}
-
-function handleToggleCupboardLock(index) {
-    toggleCupboardLock(index);
-    renderCupboardFatsList();
-}
-
-function renderCupboardFatsList() {
-    const container = $(ELEMENT_IDS.cupboardFats);
-    if (!container) return;
-
-    const settings = ui.getSettings();
-
-    ui.renderCupboardFats(container, state.cupboardFats, state.fatsDatabase, getWeightLabel(settings.unit), {
-        onWeightChange: handleCupboardWeightChange,
-        onRemove: handleRemoveCupboardFat,
-        onInfo: createFatInfoHandler(() => state.cupboardFats)
-    });
-
-    updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
-}
-
-function renderCupboardSuggestionsList() {
-    const container = $(ELEMENT_IDS.cupboardSuggestions);
-    if (!container) return;
-
-    const settings = ui.getSettings();
-
-    ui.renderCupboardSuggestions(
-        container,
-        state.cupboardSuggestions,
-        state.fatsDatabase,
-        getWeightLabel(settings.unit),
-        {
-            onWeightChange: handleCupboardSuggestionWeightChange,
-            onRemove: handleRemoveCupboardSuggestion,
-            onExclude: (fatId) => {
-                addSuggestionExclusion(fatId);
-                // Find and remove this fat from the current suggestions
-                const index = state.cupboardSuggestions.findIndex(f => f.id === fatId);
-                if (index !== -1) {
-                    removeCupboardSuggestion(index);
-                }
-                renderCupboardSuggestionsList();
-                updatePropertiesFromFats([...state.cupboardFats, ...state.cupboardSuggestions]);
-            },
-            onInfo: createFatInfoHandler(() => state.cupboardSuggestions)
-        }
-    );
-
-    // Show/hide use button
-    const useAction = $(ELEMENT_IDS.useCupboardAction);
-    if (useAction) {
-        useAction.classList.toggle(CSS_CLASSES.hidden, state.cupboardSuggestions.length === 0);
-    }
-}
-
-/**
- * Update qualitative properties display from any fat array (weights)
- * Used by both main recipe and cupboard mode
- */
-function updatePropertiesFromFats(fats) {
-    if (!fats || fats.length === 0) {
-        // Clear properties to zero
-        applyPropertyUpdates(Object.fromEntries(PROPERTY_KEYS.map(k => [k, 0])));
-        return;
-    }
-
-    const fa = calc.calculateFattyAcids(fats, state.fatsDatabase);
-    const properties = calc.calculateProperties(fa);
-    const iodine = calc.calculateIodine(fats, state.fatsDatabase);
-    const ins = calc.calculateINS(fats, state.fatsDatabase);
-
-    applyPropertyUpdates({ ...properties, iodine, ins });
 }
 
 function setupExclusionHandlers() {
@@ -1673,7 +1443,19 @@ async function init() {
     setupBuildModeHandlers();
     setupExclusionHandlers();
     setupAdditiveHandlers();
-    setupCupboardCleanerHandlers();
+    initCupboard({
+        createFatInfoHandler,
+        getCombinedExclusions,
+        onTransferRecipe: (recipe) => {
+            state.recipe = recipe;
+            state.recipeLocks = new Set();
+            switchBuildMode('fats', true);
+            renderRecipeList();
+            updateFatSelectWithFilters();
+            calculate();
+            $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
+        }
+    });
     setupFinalRecipeHandlers();
     setupCollapsibleSections();
 
