@@ -5,22 +5,19 @@
 
 import * as calc from './core/calculator.js';
 import * as optimizer from './core/optimizer.js';
-import { CSS_CLASSES, DEFAULTS, ELEMENT_IDS, getWeightLabel, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES, VOLUME } from './lib/constants.js';
+import { DEFAULTS, ELEMENT_IDS, getWeightLabel, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES, VOLUME } from './lib/constants.js';
 import * as validation from './lib/validation.js';
 import {
-    addExclusion, addFatToRecipe, clearRecipe,
+    addExclusion, clearRecipe,
     clearYoloRecipe, clearCupboardFats, clearPropertiesRecipe,
-    removeExclusion, removeFatFromRecipe, restoreState, saveState,
-    state, toggleRecipeLock, updateFatPercentage,
-    getTotalPercentage,
-    lockFatWeight, unlockFatWeight, updateLockedWeight,
+    removeExclusion, restoreState, saveState,
+    state,
     // Suggestion exclusion functions
     clearSuggestionExclusions
 } from './state/state.js';
-import { attachRowEventHandlers, renderItemRow } from './ui/components/itemRow.js';
 import { toast } from './ui/components/toast.js';
-import { $, enableTabArrowNavigation, setVisibility } from './ui/helpers.js';
-import { applyPropertyUpdates, updatePropertiesFromFats } from './ui/properties.js';
+import { $, enableTabArrowNavigation } from './ui/helpers.js';
+import { updatePropertiesFromFats } from './ui/properties.js';
 import * as ui from './ui/ui.js';
 import {
     initCupboard,
@@ -45,6 +42,13 @@ import {
     renderAdditivesList,
     updateAdditiveSelect
 } from './features/additives/index.js';
+import {
+    calculate,
+    handleRecipeWeightSettingChange,
+    initSelectFats,
+    renderRecipeList
+} from './features/selectFats/index.js';
+import { populateFatSelect } from './features/selectFats/render.js';
 
 // ============================================
 // Shared Handlers
@@ -152,217 +156,8 @@ async function loadData() {
 }
 
 // ============================================
-// Calculations
+// Cross-feature reset and orchestration
 // ============================================
-
-function calculate() {
-    const settings = ui.getSettings();
-    const recipe = state.recipe;
-    const fatsDatabase = state.fatsDatabase;
-
-    // Convert percentage-based recipe to weights for calculations
-    const recipeAsWeights = recipe.map(fat => ({
-        id: fat.id,
-        weight: fat.percentage  // Use percentage as weight (total=100%)
-    }));
-
-    const fa = calc.calculateFattyAcids(recipeAsWeights, fatsDatabase);
-    const iodine = calc.calculateIodine(recipeAsWeights, fatsDatabase);
-    const ins = calc.calculateINS(recipeAsWeights, fatsDatabase);
-    const properties = calc.calculateProperties(fa);
-
-    applyPropertyUpdates({ ...properties, iodine, ins });
-
-    // Render additives
-    renderAdditivesList();
-}
-
-function renderRecipeList() {
-    const container = $(ELEMENT_IDS.recipeFats);
-    const useFatsAction = $(ELEMENT_IDS.useFatsAction);
-    const settings = ui.getSettings();
-
-    ui.renderRecipe(container, state.recipe, state.recipeLocks, state.fatsDatabase, {
-        onPercentageChange: handlePercentageChange,
-        onWeightChange: handleRecipeWeightCellChange,
-        onToggleLock: handleToggleRecipeLock,
-        onRemove: handleRemoveFat,
-        onFatInfo: createFatInfoHandler(() => state.recipe)
-    }, settings.recipeWeight, getWeightLabel(settings.unit));
-
-    // Show/hide "Use these fats" button based on recipe content
-    setVisibility(useFatsAction, state.recipe.length > 0);
-}
-
-// ============================================
-// Event Handlers
-// ============================================
-
-function handleAddFat() {
-    const select = $(ELEMENT_IDS.fatSelect);
-    const fatId = select.value;
-
-    if (!fatId) return;
-
-    if (!addFatToRecipe(fatId)) {
-        toast.warning(UI_MESSAGES.FAT_ALREADY_EXISTS);
-        return;
-    }
-
-    renderRecipeList();
-    updateFatSelectWithFilters();
-    calculate();
-}
-
-function handleRemoveFat(index) {
-    removeFatFromRecipe(index);
-    renderRecipeList();
-    updateFatSelectWithFilters();
-    calculate();
-}
-
-function handlePercentageChange(index, percentage) {
-    updateFatPercentage(index, percentage);
-    // Update derived weight displays without re-rendering (user is typing)
-    updateRecipeDerivedDisplays(ui.getSettings());
-    calculate();
-}
-
-function handleToggleRecipeLock(index) {
-    if (state.recipeLocks.has(index)) {
-        unlockFatWeight(index);
-    } else {
-        const settings = ui.getSettings();
-        const weight = settings.recipeWeight * state.recipe[index].percentage / 100;
-        lockFatWeight(index, weight);
-    }
-    redistributeUnlockedPercentages();
-    renderRecipeList();
-}
-
-function handleRecipeWeightCellChange(index, value) {
-    const weight = parseFloat(value) || 0;
-    updateLockedWeight(index, weight);
-    // Recalculate percentage from locked weight
-    const settings = ui.getSettings();
-    const recipeWeight = settings.recipeWeight;
-    const newPercentage = recipeWeight > 0 ? (weight / recipeWeight) * 100 : 0;
-    updateFatPercentage(index, newPercentage);
-
-    redistributeUnlockedPercentages();
-    // Update DOM directly (can't re-render — user is typing in the input)
-    updateRecipeDerivedDisplays(settings);
-    calculate();
-}
-
-/**
- * Scale unlocked fats proportionally so total percentage = 100%.
- * Locked fats' percentages are derived from their weight and stay fixed.
- */
-function redistributeUnlockedPercentages() {
-    if (state.recipeLocks.size === 0) return;
-
-    const settings = ui.getSettings();
-    const recipeWeight = settings.recipeWeight;
-    if (recipeWeight <= 0) return;
-
-    // Sum locked percentages (derived from locked weights)
-    let totalLockedPct = 0;
-    for (const i of state.recipeLocks) {
-        totalLockedPct += state.recipe[i].percentage;
-    }
-
-    const remainingPct = 100 - totalLockedPct;
-
-    // Sum current unlocked percentages
-    let totalUnlockedPct = 0;
-    state.recipe.forEach((fat, i) => {
-        if (!state.recipeLocks.has(i)) totalUnlockedPct += fat.percentage;
-    });
-
-    // Nothing to scale
-    if (totalUnlockedPct === 0 || Math.abs(totalUnlockedPct - remainingPct) < 0.01) return;
-
-    const scale = remainingPct > 0 ? remainingPct / totalUnlockedPct : 0;
-
-    const newRecipe = [...state.recipe];
-    newRecipe.forEach((fat, i) => {
-        if (!state.recipeLocks.has(i)) {
-            newRecipe[i] = { ...fat, percentage: fat.percentage * scale };
-        }
-    });
-    state.recipe = newRecipe;
-}
-
-/**
- * Update derived display values (percentage spans, weights, totals) without
- * re-rendering. Called when the user is actively typing in an input.
- */
-function updateRecipeDerivedDisplays(settings) {
-    const container = $(ELEMENT_IDS.recipeFats);
-    if (!container) return;
-
-    const recipeWeight = settings.recipeWeight;
-    const unit = getWeightLabel(settings.unit);
-
-    // Update each row's display-only percentage or weight span
-    state.recipe.forEach((fat, i) => {
-        const row = container.querySelector(`.item-row[data-index="${i}"]`);
-        if (!row) return;
-
-        const isLocked = state.recipeLocks.has(i);
-        if (isLocked) {
-            // Locked row: percentage span is display-only, update it
-            const pctSpan = row.querySelector('.percentage-cell .item-percentage');
-            if (pctSpan) pctSpan.textContent = `${fat.percentage.toFixed(1)}%`;
-        } else {
-            // Unlocked row: update both display-only weight AND percentage input
-            const weightSpan = row.querySelector('.weight-cell .fat-weight');
-            if (weightSpan) {
-                const derivedWeight = (recipeWeight * fat.percentage / 100).toFixed(1);
-                weightSpan.textContent = `${derivedWeight} ${unit}`;
-            }
-            const pctInput = row.querySelector('input[data-action="percentage"]');
-            if (pctInput && pctInput !== document.activeElement) {
-                pctInput.value = parseFloat(fat.percentage.toFixed(1));
-            }
-        }
-    });
-
-    // Update totals row
-    const totalsRow = container.querySelector('.totals-row');
-    if (totalsRow) {
-        const totalPercentage = state.recipe.reduce((sum, f) => sum + f.percentage, 0);
-        const totalWeight = recipeWeight * totalPercentage / 100;
-        const spans = totalsRow.querySelectorAll('span');
-        if (spans[1]) spans[1].textContent = `${totalWeight.toFixed(1)} ${unit}`;
-        if (spans[2]) {
-            spans[2].textContent = `${totalPercentage.toFixed(1)}%`;
-            spans[2].className = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
-        }
-    }
-}
-
-function handleRecipeWeightSettingChange() {
-    const settings = ui.getSettings();
-    const newRecipeWeight = settings.recipeWeight;
-
-    // Recalculate percentages for locked fats (their weight stays fixed)
-    if (state.recipeLocks.size > 0 && newRecipeWeight > 0) {
-        const newRecipe = [...state.recipe];
-        for (const lockedIndex of state.recipeLocks) {
-            const fat = newRecipe[lockedIndex];
-            if (fat?.lockedWeight != null) {
-                newRecipe[lockedIndex] = { ...fat, percentage: (fat.lockedWeight / newRecipeWeight) * 100 };
-            }
-        }
-        state.recipe = newRecipe;
-        redistributeUnlockedPercentages();
-    }
-
-    renderRecipeList();
-    calculate();
-}
 
 function handleStartOver() {
     // Check if there's anything to clear
@@ -647,7 +442,7 @@ function createDietaryFilterFn() {
 function updateFatSelectWithFilters() {
     const filterFn = createDietaryFilterFn();
     const existingIds = state.recipe.map(f => f.id);
-    ui.populateFatSelect($(ELEMENT_IDS.fatSelect), state.fatsDatabase, existingIds, filterFn);
+    populateFatSelect($(ELEMENT_IDS.fatSelect), state.fatsDatabase, existingIds, filterFn);
 
     // Also update exclude ingredient select
     const allDatabases = getAllIngredientDatabases();
@@ -830,29 +625,11 @@ function setupSettingsListeners() {
 }
 
 function setupRecipeListeners() {
-    $(ELEMENT_IDS.addFatBtn)?.addEventListener('click', handleAddFat);
     $(ELEMENT_IDS.startOverBtn)?.addEventListener('click', handleStartOver);
     $(ELEMENT_IDS.resetSettingsBtn)?.addEventListener('click', handleResetSettings);
     $(ELEMENT_IDS.resetFatsBtn)?.addEventListener('click', handleResetFats);
     $(ELEMENT_IDS.resetAdditivesBtn)?.addEventListener('click', handleResetAdditives);
     $(ELEMENT_IDS.resetFiltersBtn)?.addEventListener('click', handleResetFilters);
-    $(ELEMENT_IDS.useFatsBtn)?.addEventListener('click', handleUseFats);
-}
-
-/**
- * Handle "Use these fats" button in Select fats mode
- * Scrolls to the additives section for the next step
- */
-function handleUseFats() {
-    if (state.recipe.length === 0) {
-        toast.info(UI_MESSAGES.ADD_FAT_FIRST);
-        return;
-    }
-    // Scroll to additives section as the next logical step
-    const additivesSection = $(ELEMENT_IDS.additivesSubcontainer);
-    if (additivesSection) {
-        additivesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
 }
 
 function setupPanelHandlers() {
@@ -1070,6 +847,12 @@ async function init() {
         updateTabStates,
         recalculate: calculate
     });
+    initSelectFats({
+        createFatInfoHandler,
+        updateFatSelectWithFilters,
+        renderAdditivesList
+    });
+
     const transferRecipeToSelectFats = (recipe) => {
         state.recipe = recipe;
         state.recipeLocks = new Set();

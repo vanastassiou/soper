@@ -22,8 +22,7 @@ import {
     onActivate,
     parseFloatOr,
     populateSelect,
-    positionNearAnchor,
-    setupAbortSignal
+    positionNearAnchor
 } from './helpers.js';
 
 import {
@@ -31,106 +30,8 @@ import {
     openPanel
 } from './panelManager.js';
 
-import {
-    attachRowEventHandlers,
-    renderEmptyState,
-    renderItemRow
-} from './components/itemRow.js';
-
 // Re-export final recipe functions from submodule
 export { renderFinalRecipe, showFinalRecipe } from './finalRecipe.js';
-
-// ============================================
-// Fat Select Dropdown
-// ============================================
-
-/**
- * Populate fat select dropdown
- * @param {HTMLSelectElement} selectElement - The select element
- * @param {Object} fatsDatabase - Fat database object
- * @param {Array} excludeIds - IDs to exclude from the list
- * @param {Function} filterFn - Optional filter function (id, data) => boolean
- */
-export function populateFatSelect(selectElement, fatsDatabase, excludeIds = [], filterFn = null) {
-    populateSelect(selectElement, fatsDatabase, excludeIds, filterFn);
-}
-
-// ============================================
-// Recipe Rendering
-// ============================================
-
-/**
- * Render the recipe fats list (Select fats mode - weight-lockable)
- * @param {HTMLElement} container - Container element
- * @param {Array} recipe - Array of {id, percentage, lockedWeight?}
- * @param {Set} locks - Set of locked indices
- * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {Object} callbacks - {onPercentageChange, onWeightChange, onToggleLock, onRemove, onFatInfo}
- * @param {number} recipeWeight - Total recipe weight from settings
- * @param {string} unit - Unit label (g or oz)
- */
-export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks, recipeWeight, unit) {
-    const signal = setupAbortSignal(container);
-
-    if (recipe.length === 0) {
-        container.innerHTML = renderEmptyState(UI_MESSAGES.NO_FATS_ADDED);
-        return;
-    }
-
-    const totalPercentage = recipe.reduce((sum, fat) => sum + fat.percentage, 0);
-    const totalWeight = recipeWeight * totalPercentage / 100;
-
-    const rows = recipe.map((fat, i) => {
-        const fatData = fatsDatabase[fat.id];
-        const isLocked = locks.has(i);
-        const derivedWeight = recipeWeight * fat.percentage / 100;
-        const displayWeight = isLocked && fat.lockedWeight != null
-            ? parseFloat(fat.lockedWeight.toFixed(1))
-            : parseFloat(derivedWeight.toFixed(1));
-
-        // Format percentage for display when locked (derived from weight)
-        const displayPercentage = isLocked
-            ? parseFloat(fat.percentage.toFixed(1))
-            : fat.percentage;
-
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            weight: displayWeight,
-            percentage: displayPercentage,
-            isLocked
-        }, i, {
-            inputType: isLocked ? 'weight' : 'percentage',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: 'weight',
-            itemType: 'fat',
-            unit
-        });
-    }).join('');
-
-    // Show totals with both weight and percentage
-    const percentWarning = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
-    const totalsRow = `
-        <div class="totals-row">
-            <span>Total</span>
-            <span>${totalWeight.toFixed(1)} ${unit}</span>
-            <span class="${percentWarning}">${totalPercentage.toFixed(1)}%</span>
-            <span></span>
-        </div>
-    `;
-
-    container.innerHTML = rows + totalsRow;
-
-    // Attach event handlers with abort signal for cleanup
-    attachRowEventHandlers(container, {
-        onPercentageChange: callbacks.onPercentageChange,
-        onWeightChange: callbacks.onWeightChange,
-        onToggleLock: callbacks.onToggleLock,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onFatInfo
-    }, 'fat', signal);
-}
 
 // ============================================
 // Results Display
