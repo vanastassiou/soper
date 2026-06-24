@@ -9,14 +9,12 @@ import { ADDITIVE_CATEGORIES, ADDITIVE_WARNING_TYPES, CSS_CLASSES, DEFAULTS, ELE
 import * as validation from './lib/validation.js';
 import {
     addAdditiveToRecipe, addExclusion, addFatToRecipe, clearRecipe,
-    clearYoloRecipe, clearCupboardFats,
+    clearYoloRecipe, clearCupboardFats, clearPropertiesRecipe,
     removeAdditiveFromRecipe, removeExclusion,
     removeFatFromRecipe, restoreState, saveState,
     state, toggleRecipeLock, updateFatPercentage,
     updateAdditiveWeight, getTotalPercentage,
     lockFatWeight, unlockFatWeight, updateLockedWeight,
-    // Properties mode state functions
-    setPropertiesRecipe, togglePropertiesLock, getPropertiesLockedFats, clearPropertiesRecipe,
     // Suggestion exclusion functions
     clearSuggestionExclusions
 } from './state/state.js';
@@ -36,6 +34,11 @@ import {
     renderYoloRecipe,
     resetYoloMode
 } from './features/yolo/index.js';
+import {
+    hideProfileResults,
+    initProfileBuilder,
+    resetProfileBuilder
+} from './features/profileBuilder/index.js';
 
 // ============================================
 // Shared Handlers
@@ -459,11 +462,8 @@ function handleStartOver() {
     resetYoloMode();
     renderAdditivesList();
     updateExclusionUI();
-    ui.hideProfileResults();
-
-    // Reset Generate button text (Yolo button text is reset by resetYoloMode)
-    const generateBtn = $(ELEMENT_IDS.generateRecipeBtn);
-    if (generateBtn) generateBtn.textContent = 'Generate';
+    hideProfileResults();
+    resetProfileBuilder();
 
     calculate();
 }
@@ -793,98 +793,6 @@ function getCombinedExclusions() {
 }
 
 // ============================================
-// Profile Builder
-// ============================================
-
-// Store last target profile for re-rendering
-let lastTargetProfile = null;
-
-function handleGenerateFromProfile() {
-    const propertyTargets = ui.getPropertyTargets();
-
-    const validationError = optimizer.validatePropertyTargets(propertyTargets);
-    if (validationError) {
-        toast.error(validationError);
-        return;
-    }
-
-    const targetProfile = optimizer.propertiesToFattyAcidTargets(propertyTargets);
-
-    if (Object.keys(targetProfile).length === 0) {
-        toast.info(UI_MESSAGES.ENTER_PROPERTY_TARGET);
-        return;
-    }
-
-    lastTargetProfile = targetProfile;
-
-    const lockedFats = getPropertiesLockedFats();
-    const excludedFats = getCombinedExclusions();
-    const options = ui.getProfileBuilderOptions(excludedFats);
-    options.lockedFats = lockedFats;
-
-    const result = optimizer.findFatsForProfile(targetProfile, state.fatsDatabase, options);
-
-    if (result.recipe.length === 0) {
-        toast.warning(UI_MESSAGES.NO_FAT_COMBINATION);
-        return;
-    }
-
-    // Store recipe in state and preserve locks for locked fats
-    const newLockedIndices = new Set();
-    lockedFats.forEach(lockedFat => {
-        const newIndex = result.recipe.findIndex(f => f.id === lockedFat.id);
-        if (newIndex !== -1) {
-            newLockedIndices.add(newIndex);
-        }
-    });
-    setPropertiesRecipe(result.recipe, newLockedIndices);
-
-    renderPropertiesResults(result, targetProfile);
-
-    // Change button text to "Re-roll" after first generation
-    const generateBtn = $(ELEMENT_IDS.generateRecipeBtn);
-    if (generateBtn) generateBtn.textContent = 'Re-roll';
-}
-
-function renderPropertiesResults(result, targetProfile) {
-    ui.renderProfileResults(result, targetProfile, state.fatsDatabase, state.propertiesLockedIndices, {
-        onUseRecipe: handleUseGeneratedRecipe,
-        onFatInfo: createFatInfoHandler(() => state.propertiesRecipe),
-        onToggleLock: handleTogglePropertiesLock
-    });
-}
-
-function handleTogglePropertiesLock(index) {
-    togglePropertiesLock(index);
-    // Re-render with updated locks
-    if (state.propertiesRecipe.length > 0 && lastTargetProfile) {
-        // Reconstruct result object for re-render
-        const result = {
-            recipe: state.propertiesRecipe,
-            matchQuality: 100, // Preserve current display
-            achieved: {}
-        };
-        renderPropertiesResults(result, lastTargetProfile);
-    }
-}
-
-function handleUseGeneratedRecipe(generatedRecipe) {
-    // Transfer percentages directly to main recipe
-    state.recipe = generatedRecipe.map(fat => ({
-        id: fat.id,
-        percentage: fat.percentage
-    }));
-    state.recipeLocks = new Set();
-
-    switchBuildMode('fats', true); // Skip warning - intentionally transferring recipe
-    renderRecipeList();
-    updateFatSelectWithFilters();
-    calculate();
-
-    $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
-}
-
-// ============================================
 // Tab/Mode Switching
 // ============================================
 
@@ -935,11 +843,8 @@ function clearModeData(mode) {
             break;
         case 'properties':
             clearPropertiesRecipe();
-            lastTargetProfile = null;
-            ui.hideProfileResults();
-            // Reset button text
-            const generateBtn = $(ELEMENT_IDS.generateRecipeBtn);
-            if (generateBtn) generateBtn.textContent = 'Generate';
+            hideProfileResults();
+            resetProfileBuilder();
             break;
         case 'yolo':
             clearYoloRecipe();
@@ -966,10 +871,9 @@ function switchBuildMode(mode, skipWarning = false) {
         clearModeData(currentBuildMode);
     }
 
-    // Reset Generate button text when leaving properties mode
+    // Reset Profile Builder button text when leaving properties mode
     if (currentBuildMode === 'properties') {
-        const generateBtn = $(ELEMENT_IDS.generateRecipeBtn);
-        if (generateBtn) generateBtn.textContent = 'Generate';
+        resetProfileBuilder();
     }
 
     currentBuildMode = mode;
@@ -987,7 +891,7 @@ function switchBuildMode(mode, skipWarning = false) {
     $('yoloDescription')?.classList.toggle('hidden', mode !== 'yolo');
     $('cupboardDescription')?.classList.toggle('hidden', mode !== 'cupboard');
 
-    ui.hideProfileResults();
+    hideProfileResults();
 
     // Update properties display for the new mode
     updatePropertiesForMode(mode);
@@ -1175,7 +1079,6 @@ function setupBuildModeHandlers() {
         });
     }
 
-    $(ELEMENT_IDS.generateRecipeBtn)?.addEventListener('click', handleGenerateFromProfile);
 }
 
 function setupExclusionHandlers() {
@@ -1328,6 +1231,11 @@ async function init() {
         onTransferRecipe: transferRecipeToSelectFats
     });
     initYolo({
+        createFatInfoHandler,
+        getCombinedExclusions,
+        onTransferRecipe: transferRecipeToSelectFats
+    });
+    initProfileBuilder({
         createFatInfoHandler,
         getCombinedExclusions,
         onTransferRecipe: transferRecipeToSelectFats
