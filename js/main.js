@@ -10,15 +10,15 @@ import * as validation from './lib/validation.js';
 import {
     addAdditiveToRecipe, addExclusion, addFatToRecipe, clearRecipe,
     clearYoloRecipe, clearCupboardFats,
-    getYoloLockedFats, removeAdditiveFromRecipe, removeExclusion,
-    removeFatFromRecipe, removeYoloFat, restoreState, saveState,
-    setYoloRecipe, state, toggleRecipeLock, updateFatPercentage,
-    toggleYoloLock, updateAdditiveWeight, getTotalPercentage,
+    removeAdditiveFromRecipe, removeExclusion,
+    removeFatFromRecipe, restoreState, saveState,
+    state, toggleRecipeLock, updateFatPercentage,
+    updateAdditiveWeight, getTotalPercentage,
     lockFatWeight, unlockFatWeight, updateLockedWeight,
     // Properties mode state functions
     setPropertiesRecipe, togglePropertiesLock, getPropertiesLockedFats, clearPropertiesRecipe,
     // Suggestion exclusion functions
-    addSuggestionExclusion, clearSuggestionExclusions
+    clearSuggestionExclusions
 } from './state/state.js';
 import { attachRowEventHandlers, renderItemRow } from './ui/components/itemRow.js';
 import { toast } from './ui/components/toast.js';
@@ -31,6 +31,11 @@ import {
     renderCupboardSuggestionsList,
     resetCupboardMode
 } from './features/cupboard/index.js';
+import {
+    initYolo,
+    renderYoloRecipe,
+    resetYoloMode
+} from './features/yolo/index.js';
 
 // ============================================
 // Shared Handlers
@@ -451,16 +456,14 @@ function handleStartOver() {
 
     // Update UI
     renderRecipeList();
-    renderYoloRecipe();
+    resetYoloMode();
     renderAdditivesList();
     updateExclusionUI();
     ui.hideProfileResults();
 
-    // Reset button texts
+    // Reset Generate button text (Yolo button text is reset by resetYoloMode)
     const generateBtn = $(ELEMENT_IDS.generateRecipeBtn);
-    const yoloBtn = $(ELEMENT_IDS.yoloBtn);
     if (generateBtn) generateBtn.textContent = 'Generate';
-    if (yoloBtn) yoloBtn.textContent = 'Surprise me!';
 
     calculate();
 }
@@ -941,10 +944,7 @@ function clearModeData(mode) {
         case 'yolo':
             clearYoloRecipe();
             clearSuggestionExclusions();
-            renderYoloRecipe();
-            // Reset button text
-            const yoloBtn = $(ELEMENT_IDS.yoloBtn);
-            if (yoloBtn) yoloBtn.textContent = 'Surprise me!';
+            resetYoloMode();
             break;
         case 'cupboard':
             clearCupboardFats();
@@ -1176,137 +1176,6 @@ function setupBuildModeHandlers() {
     }
 
     $(ELEMENT_IDS.generateRecipeBtn)?.addEventListener('click', handleGenerateFromProfile);
-    $(ELEMENT_IDS.yoloBtn)?.addEventListener('click', handleYoloGenerate);
-    $(ELEMENT_IDS.useYoloRecipeBtn)?.addEventListener('click', handleUseYoloRecipe);
-}
-
-function handleYoloGenerate() {
-    const lockedFats = getYoloLockedFats();
-    const excludedFats = getCombinedExclusions();
-
-    const result = optimizer.generateRandomRecipe(state.fatsDatabase, {
-        excludeFats: excludedFats,
-        lockedFats,
-        minFats: DEFAULTS.YOLO_MIN_FATS,
-        maxFats: DEFAULTS.YOLO_MAX_FATS
-    });
-
-    // Only fail if not enough fats available (exclusions too restrictive)
-    if (!result) {
-        toast.warning(UI_MESSAGES.YOLO_GENERATION_FAILED);
-        return;
-    }
-
-    // Store in YOLO state - locked fats are at the start of the recipe array
-    // Preserve locks for the locked fats (they're at indices 0 to lockedFats.length-1)
-    const newLockedIndices = new Set();
-    for (let i = 0; i < lockedFats.length; i++) {
-        newLockedIndices.add(i);
-    }
-    setYoloRecipe(result.recipe, newLockedIndices);
-
-    // Render the YOLO recipe list
-    renderYoloRecipe();
-
-    // Change button text to "Re-roll" after first generation
-    const yoloBtn = $(ELEMENT_IDS.yoloBtn);
-    if (yoloBtn) yoloBtn.textContent = 'Re-roll';
-}
-
-/**
- * Render the YOLO recipe fat list
- */
-function renderYoloRecipe() {
-    const container = $(ELEMENT_IDS.yoloRecipeFats);
-    const useAction = $(ELEMENT_IDS.useYoloRecipeAction);
-    if (!container) return;
-
-    if (state.yoloRecipe.length === 0) {
-        container.innerHTML = '';
-        setVisibility(useAction, false);
-        // Clear properties display
-        updatePropertiesFromFats([], state.fatsDatabase);
-        return;
-    }
-
-    // Update properties display - convert percentages to weights for calculation
-    const yoloFatsAsWeights = state.yoloRecipe.map(f => ({
-        id: f.id,
-        weight: f.percentage // Use percentage as weight (total=100)
-    }));
-    updatePropertiesFromFats(yoloFatsAsWeights, state.fatsDatabase);
-
-    // Show the "Use This Recipe" action
-    setVisibility(useAction, true);
-
-    // Render rows using shared component
-    container.innerHTML = state.yoloRecipe.map((item, index) => {
-        const fat = state.fatsDatabase[item.id];
-        return renderItemRow({
-            id: item.id,
-            name: fat?.name || item.id,
-            percentage: item.percentage,
-            isLocked: state.yoloLockedIndices.has(index)
-        }, index, {
-            showWeight: false,
-            showPercentage: true,
-            lockableField: 'percentage',
-            showExcludeButton: true,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    // Store callbacks on container for dynamic lookup
-    container._callbacks = {
-        onToggleLock: (index) => {
-            toggleYoloLock(index);
-            renderYoloRecipe();
-        },
-        onRemove: (index) => {
-            removeYoloFat(index);
-            renderYoloRecipe();
-        },
-        onExclude: (fatId) => {
-            addSuggestionExclusion(fatId);
-            // Find and remove this fat from the current YOLO recipe
-            const index = state.yoloRecipe.findIndex(f => f.id === fatId);
-            if (index !== -1) {
-                removeYoloFat(index);
-            }
-            renderYoloRecipe();
-        },
-        onInfo: createFatInfoHandler(() => state.yoloRecipe)
-    };
-
-    // Only attach event handlers once per container
-    if (!container.dataset.handlersAttached) {
-        attachRowEventHandlers(container, container._callbacks, 'fat');
-        container.dataset.handlersAttached = 'true';
-    }
-}
-
-/**
- * Handle "Use This Recipe" button click from YOLO mode
- */
-function handleUseYoloRecipe() {
-    if (state.yoloRecipe.length === 0) return;
-
-    // Transfer percentages directly to main recipe
-    state.recipe = state.yoloRecipe.map(fat => ({
-        id: fat.id,
-        percentage: fat.percentage
-    }));
-    state.recipeLocks = new Set();
-
-    // Clear YOLO state since we're transferring the recipe
-    clearYoloRecipe();
-
-    switchBuildMode('fats', true); // Skip warning - intentionally transferring recipe
-    renderRecipeList();
-    updateFatSelectWithFilters();
-    calculate();
-
-    $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
 }
 
 function setupExclusionHandlers() {
@@ -1443,18 +1312,25 @@ async function init() {
     setupBuildModeHandlers();
     setupExclusionHandlers();
     setupAdditiveHandlers();
+    const transferRecipeToSelectFats = (recipe) => {
+        state.recipe = recipe;
+        state.recipeLocks = new Set();
+        switchBuildMode('fats', true);
+        renderRecipeList();
+        updateFatSelectWithFilters();
+        calculate();
+        $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
+    };
+
     initCupboard({
         createFatInfoHandler,
         getCombinedExclusions,
-        onTransferRecipe: (recipe) => {
-            state.recipe = recipe;
-            state.recipeLocks = new Set();
-            switchBuildMode('fats', true);
-            renderRecipeList();
-            updateFatSelectWithFilters();
-            calculate();
-            $(ELEMENT_IDS.recipeFats).scrollIntoView({ behavior: 'smooth' });
-        }
+        onTransferRecipe: transferRecipeToSelectFats
+    });
+    initYolo({
+        createFatInfoHandler,
+        getCombinedExclusions,
+        onTransferRecipe: transferRecipeToSelectFats
     });
     setupFinalRecipeHandlers();
     setupCollapsibleSections();
