@@ -5,15 +5,14 @@
 
 import * as calc from './core/calculator.js';
 import * as optimizer from './core/optimizer.js';
-import { ADDITIVE_CATEGORIES, ADDITIVE_WARNING_TYPES, CSS_CLASSES, DEFAULTS, ELEMENT_IDS, getWeightLabel, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES, VOLUME } from './lib/constants.js';
+import { CSS_CLASSES, DEFAULTS, ELEMENT_IDS, getWeightLabel, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES, VOLUME } from './lib/constants.js';
 import * as validation from './lib/validation.js';
 import {
-    addAdditiveToRecipe, addExclusion, addFatToRecipe, clearRecipe,
+    addExclusion, addFatToRecipe, clearRecipe,
     clearYoloRecipe, clearCupboardFats, clearPropertiesRecipe,
-    removeAdditiveFromRecipe, removeExclusion,
-    removeFatFromRecipe, restoreState, saveState,
+    removeExclusion, removeFatFromRecipe, restoreState, saveState,
     state, toggleRecipeLock, updateFatPercentage,
-    updateAdditiveWeight, getTotalPercentage,
+    getTotalPercentage,
     lockFatWeight, unlockFatWeight, updateLockedWeight,
     // Suggestion exclusion functions
     clearSuggestionExclusions
@@ -39,6 +38,13 @@ import {
     initProfileBuilder,
     resetProfileBuilder
 } from './features/profileBuilder/index.js';
+import {
+    getAllAdditivesDatabase,
+    initAdditives,
+    mergeAdditiveWarningsIntoNotes,
+    renderAdditivesList,
+    updateAdditiveSelect
+} from './features/additives/index.js';
 
 // ============================================
 // Shared Handlers
@@ -186,59 +192,6 @@ function renderRecipeList() {
 
     // Show/hide "Use these fats" button based on recipe content
     setVisibility(useFatsAction, state.recipe.length > 0);
-}
-
-function renderAdditivesList() {
-    const container = $(ELEMENT_IDS.recipeAdditives);
-    if (!container) return [];
-
-    const settings = ui.getSettings();
-    const totalFatWeight = settings.recipeWeight;
-    const allAdditives = getAllAdditivesDatabase();
-
-    return ui.renderAdditives(
-        container,
-        state.recipeAdditives,
-        allAdditives,
-        totalFatWeight,
-        getWeightLabel(settings.unit),
-        {
-            onWeightChange: handleAdditiveWeightChange,
-            onRemove: handleRemoveAdditive,
-            onInfo: (additiveId) => ui.showAdditiveInfo(additiveId, allAdditives, state.sourcesData)
-        }
-    );
-}
-
-/**
- * Convert additive warnings to recipe note format
- * @param {Array} notes - Existing recipe notes
- * @param {Array} warnings - Additive warnings from renderAdditives
- * @returns {Array} Merged notes array
- */
-function mergeAdditiveWarningsIntoNotes(notes, warnings) {
-    if (!warnings || warnings.length === 0) return notes;
-
-    const warningNotes = warnings.map(warning => {
-        let noteType = 'info';
-        let icon = '⚠️';
-
-        if (warning.type === ADDITIVE_WARNING_TYPES.DANGER) {
-            noteType = 'warning';
-            icon = '🚫';
-        } else if (warning.type === ADDITIVE_WARNING_TYPES.WARNING) {
-            noteType = 'warning';
-            icon = '⚠️';
-        }
-
-        return {
-            type: noteType,
-            icon,
-            text: `${warning.additiveName}: ${warning.message}`
-        };
-    });
-
-    return [...warningNotes, ...notes];
 }
 
 // ============================================
@@ -615,87 +568,6 @@ function getAllIngredientDatabases() {
         soapPerformance: state.soapPerformanceDatabase,
         skinCare: state.skinCareDatabase
     };
-}
-
-// ============================================
-// Additive Event Handlers
-// ============================================
-
-let currentAdditiveCategory = ADDITIVE_CATEGORIES.FRAGRANCE;
-
-/**
- * Mapping from category to state database property
- */
-const ADDITIVE_DATABASES = {
-    [ADDITIVE_CATEGORIES.FRAGRANCE]: 'fragrancesDatabase',
-    [ADDITIVE_CATEGORIES.COLOURANT]: 'colourantsDatabase',
-    [ADDITIVE_CATEGORIES.SOAP_PERFORMANCE]: 'soapPerformanceDatabase',
-    [ADDITIVE_CATEGORIES.SKIN_CARE]: 'skinCareDatabase'
-};
-
-/**
- * Get the database for a specific additive category
- * @param {string} category - The category (fragrance, colourant, soap-performance, skin-care)
- * @returns {Object} The appropriate database
- */
-function getAdditiveDatabaseForCategory(category) {
-    const dbName = ADDITIVE_DATABASES[category];
-    return dbName ? state[dbName] : {};
-}
-
-/**
- * Get combined database for looking up any additive by ID
- * @returns {Object} Combined database of all additives
- */
-function getAllAdditivesDatabase() {
-    return {
-        ...state.fragrancesDatabase,
-        ...state.colourantsDatabase,
-        ...state.soapPerformanceDatabase,
-        ...state.skinCareDatabase
-    };
-}
-
-function handleAddAdditive() {
-    const select = $(ELEMENT_IDS.additiveSelect);
-    const additiveId = select.value;
-
-    if (!additiveId) return;
-    if (!addAdditiveToRecipe(additiveId)) {
-        toast.warning(UI_MESSAGES.ADDITIVE_ALREADY_EXISTS);
-        return;
-    }
-
-    updateAdditiveSelect();
-    calculate();
-    select.value = '';
-}
-
-function handleRemoveAdditive(index) {
-    removeAdditiveFromRecipe(index);
-    updateAdditiveSelect();
-    calculate();
-}
-
-function handleAdditiveWeightChange(index, weight) {
-    updateAdditiveWeight(index, weight);
-    calculate();
-}
-
-function switchAdditiveCategory(category) {
-    currentAdditiveCategory = category;
-    updateTabStates('.additive-tab', 'category', category);
-    updateAdditiveSelect();
-}
-
-function updateAdditiveSelect() {
-    const select = $(ELEMENT_IDS.additiveSelect);
-    if (!select) return;
-
-    const existingIds = state.recipeAdditives.map(a => a.id);
-    const database = getAdditiveDatabaseForCategory(currentAdditiveCategory);
-    const filterFn = createDietaryFilterFn();
-    ui.populateAdditiveSelect(select, database, existingIds, filterFn);
 }
 
 // ============================================
@@ -1092,27 +964,6 @@ function setupExclusionHandlers() {
     $(ELEMENT_IDS.addExclusionBtn)?.addEventListener('click', handleAddExclusion);
 }
 
-function setupAdditiveHandlers() {
-    // Click handlers for additive tabs
-    document.querySelectorAll('.additive-tab').forEach(tab => {
-        tab.addEventListener('click', () => switchAdditiveCategory(tab.dataset.category));
-    });
-
-    // Arrow key navigation for additive tabs (WCAG accessibility)
-    const additiveTablist = document.querySelector('.additive-tabs[role="tablist"]');
-    if (additiveTablist) {
-        enableTabArrowNavigation(additiveTablist, (tab) => {
-            switchAdditiveCategory(tab.dataset.category);
-        });
-    }
-
-    // Add button
-    $(ELEMENT_IDS.addAdditiveBtn)?.addEventListener('click', handleAddAdditive);
-
-    // Initialize select with default category
-    updateAdditiveSelect();
-}
-
 // ============================================
 // Final Recipe Handlers
 // ============================================
@@ -1214,7 +1065,11 @@ async function init() {
     setupPanelHandlers();
     setupBuildModeHandlers();
     setupExclusionHandlers();
-    setupAdditiveHandlers();
+    initAdditives({
+        createDietaryFilterFn,
+        updateTabStates,
+        recalculate: calculate
+    });
     const transferRecipeToSelectFats = (recipe) => {
         state.recipe = recipe;
         state.recipeLocks = new Set();
