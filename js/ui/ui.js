@@ -4,19 +4,16 @@
  */
 
 import {
-    ADDITIVE_WARNING_TYPES,
     CSS_CLASSES,
     DEFAULTS,
     ELEMENT_IDS,
-    FATTY_ACID_NAMES,
-    MATCH_THRESHOLDS,
     PROPERTY_ELEMENT_IDS,
     PROPERTY_FATTY_ACIDS,
     PROPERTY_KEYS,
     UI_MESSAGES
 } from '../lib/constants.js';
 
-import { checkAdditiveWarnings, getFatSoapProperties } from '../core/calculator.js';
+import { getFatSoapProperties } from '../core/calculator.js';
 import { resolveReferences } from '../lib/references.js';
 
 import {
@@ -24,10 +21,8 @@ import {
     delegate,
     onActivate,
     parseFloatOr,
-    parseIntOr,
     populateSelect,
-    positionNearAnchor,
-    setupAbortSignal
+    positionNearAnchor
 } from './helpers.js';
 
 import {
@@ -35,108 +30,8 @@ import {
     openPanel
 } from './panelManager.js';
 
-import {
-    attachRowEventHandlers,
-    attachRowEventHandlersWithSignal,
-    renderEmptyState,
-    renderItemRow,
-    renderTotalsRow
-} from './components/itemRow.js';
-
 // Re-export final recipe functions from submodule
 export { renderFinalRecipe, showFinalRecipe } from './finalRecipe.js';
-
-// ============================================
-// Fat Select Dropdown
-// ============================================
-
-/**
- * Populate fat select dropdown
- * @param {HTMLSelectElement} selectElement - The select element
- * @param {Object} fatsDatabase - Fat database object
- * @param {Array} excludeIds - IDs to exclude from the list
- * @param {Function} filterFn - Optional filter function (id, data) => boolean
- */
-export function populateFatSelect(selectElement, fatsDatabase, excludeIds = [], filterFn = null) {
-    populateSelect(selectElement, fatsDatabase, excludeIds, filterFn);
-}
-
-// ============================================
-// Recipe Rendering
-// ============================================
-
-/**
- * Render the recipe fats list (Select fats mode - weight-lockable)
- * @param {HTMLElement} container - Container element
- * @param {Array} recipe - Array of {id, percentage, lockedWeight?}
- * @param {Set} locks - Set of locked indices
- * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {Object} callbacks - {onPercentageChange, onWeightChange, onToggleLock, onRemove, onFatInfo}
- * @param {number} recipeWeight - Total recipe weight from settings
- * @param {string} unit - Unit label (g or oz)
- */
-export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks, recipeWeight, unit) {
-    const signal = setupAbortSignal(container);
-
-    if (recipe.length === 0) {
-        container.innerHTML = renderEmptyState(UI_MESSAGES.NO_FATS_ADDED);
-        return;
-    }
-
-    const totalPercentage = recipe.reduce((sum, fat) => sum + fat.percentage, 0);
-    const totalWeight = recipeWeight * totalPercentage / 100;
-
-    const rows = recipe.map((fat, i) => {
-        const fatData = fatsDatabase[fat.id];
-        const isLocked = locks.has(i);
-        const derivedWeight = recipeWeight * fat.percentage / 100;
-        const displayWeight = isLocked && fat.lockedWeight != null
-            ? parseFloat(fat.lockedWeight.toFixed(1))
-            : parseFloat(derivedWeight.toFixed(1));
-
-        // Format percentage for display when locked (derived from weight)
-        const displayPercentage = isLocked
-            ? parseFloat(fat.percentage.toFixed(1))
-            : fat.percentage;
-
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            weight: displayWeight,
-            percentage: displayPercentage,
-            isLocked
-        }, i, {
-            inputType: isLocked ? 'weight' : 'percentage',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: 'weight',
-            itemType: 'fat',
-            unit
-        });
-    }).join('');
-
-    // Show totals with both weight and percentage
-    const percentWarning = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
-    const totalsRow = `
-        <div class="totals-row">
-            <span>Total</span>
-            <span>${totalWeight.toFixed(1)} ${unit}</span>
-            <span class="${percentWarning}">${totalPercentage.toFixed(1)}%</span>
-            <span></span>
-        </div>
-    `;
-
-    container.innerHTML = rows + totalsRow;
-
-    // Attach event handlers with abort signal for cleanup
-    attachRowEventHandlersWithSignal(container, {
-        onPercentageChange: callbacks.onPercentageChange,
-        onWeightChange: callbacks.onWeightChange,
-        onToggleLock: callbacks.onToggleLock,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onFatInfo
-    }, 'fat', signal);
-}
 
 // ============================================
 // Results Display
@@ -256,6 +151,33 @@ export function updatePercentages(recipe, unit) {
 // ============================================
 
 /**
+ * Render a single panel-list row: label on the left, value on the right.
+ */
+function panelListItem(label, value) {
+    return `
+        <div class="panel-list-item">
+            <span class="panel-list-name">${label}</span>
+            <span class="panel-list-value">${value}</span>
+        </div>
+    `;
+}
+
+/**
+ * Render the four standard soap properties (Hardness, Degreasing, Lather, Moisturizing).
+ * Used by both the fat-info and fatty-acid panels.
+ */
+function renderSoapProperties(props) {
+    return [
+        ['Hardness', props.hardness],
+        ['Degreasing', props.degreasing],
+        ['Lather', props.lather],
+        ['Moisturizing', props.moisturizing]
+    ].map(([label, value]) => `
+        <div class="panel-prop-item"><span class="panel-prop-label">${label}</span><span class="panel-prop-value">${value}</span></div>
+    `).join('');
+}
+
+/**
  * Render references section into a panel
  * @param {HTMLElement} panel - The panel element to append references to
  * @param {Array} references - Array of {sourceId, section, url}
@@ -309,34 +231,14 @@ export function showFatInfo(fatId, fatsDatabase, fattyAcidsData, sourcesData, on
     const sap = fat.details?.sap || fat.sap;
     const usage = fat.details?.usage || fat.usage;
 
-    $('fatPanelDetails').innerHTML = `
-        <div class="panel-list-item">
-            <span class="panel-list-name">NaOH SAP</span>
-            <span class="panel-list-value">${sap.naoh}</span>
-        </div>
-        <div class="panel-list-item">
-            <span class="panel-list-name">KOH SAP</span>
-            <span class="panel-list-value">${sap.koh}</span>
-        </div>
-        <div class="panel-list-item">
-            <span class="panel-list-name">Recommended usage</span>
-            <span class="panel-list-value">${usage.min}–${usage.max}%</span>
-        </div>
-    `;
+    $('fatPanelDetails').innerHTML =
+        panelListItem('NaOH SAP', sap.naoh)
+        + panelListItem('KOH SAP', sap.koh)
+        + panelListItem('Recommended usage', `${usage.min}–${usage.max}%`);
 
     // Details: soap properties
     const soapProps = getFatSoapProperties(fat, fattyAcidsData);
-    const propsEl = $('fatPanelProperties');
-    if (soapProps) {
-        propsEl.innerHTML = `
-            <div class="panel-prop-item"><span class="panel-prop-label">Hardness</span><span class="panel-prop-value">${soapProps.hardness}</span></div>
-            <div class="panel-prop-item"><span class="panel-prop-label">Degreasing</span><span class="panel-prop-value">${soapProps.degreasing}</span></div>
-            <div class="panel-prop-item"><span class="panel-prop-label">Lather</span><span class="panel-prop-value">${soapProps.lather}</span></div>
-            <div class="panel-prop-item"><span class="panel-prop-label">Moisturizing</span><span class="panel-prop-value">${soapProps.moisturizing}</span></div>
-        `;
-    } else {
-        propsEl.innerHTML = '';
-    }
+    $('fatPanelProperties').innerHTML = soapProps ? renderSoapProperties(soapProps) : '';
 
     // Fatty acid composition
     const faContainer = $('fatPanelFattyAcids');
@@ -436,12 +338,8 @@ export function showGlossaryInfo(term, glossaryData, recipe, fatsDatabase, sourc
 
         if (contributors.length > 0) {
             contributorsEl.innerHTML = contributors
-                .map(c => `
-                    <div class="panel-list-item">
-                        <span class="panel-list-name">${c.name}</span>
-                        <span class="panel-list-value">${c.value.toFixed(1)}</span>
-                    </div>
-                `).join('');
+                .map(c => panelListItem(c.name, c.value.toFixed(1)))
+                .join('');
             contributorsSection.style.display = 'block';
         } else {
             contributorsSection.style.display = 'none';
@@ -551,24 +449,14 @@ export function showFattyAcidInfo(acidKey, fattyAcidsData, recipe, fatsDatabase,
 
     // Details: soap properties
     const props = acid.details?.soapProperties || acid.soapProperties;
-    $('faContribution').innerHTML = `
-        <div class="panel-prop-item"><span class="panel-prop-label">Hardness</span><span class="panel-prop-value">${props.hardness}</span></div>
-        <div class="panel-prop-item"><span class="panel-prop-label">Degreasing</span><span class="panel-prop-value">${props.degreasing}</span></div>
-        <div class="panel-prop-item"><span class="panel-prop-label">Lather</span><span class="panel-prop-value">${props.lather}</span></div>
-        <div class="panel-prop-item"><span class="panel-prop-label">Moisturizing</span><span class="panel-prop-value">${props.moisturizing}</span></div>
-    `;
+    $('faContribution').innerHTML = renderSoapProperties(props);
 
     // Details: recipe sources
     const recipeSources = findRecipeSourcesForAcid(recipe, fatsDatabase, acidKey);
     const recipeSourcesEl = $('faRecipeSources');
 
     recipeSourcesEl.innerHTML = recipeSources.length > 0
-        ? recipeSources.map(s => `
-            <div class="panel-list-item">
-                <span class="panel-list-name">${s.name}</span>
-                <span class="panel-list-value">${s.percent}%</span>
-            </div>
-        `).join('')
+        ? recipeSources.map(s => panelListItem(s.name, `${s.percent}%`)).join('')
         : '<p class="panel-empty-state">No fats in your recipe contain this fatty acid</p>';
 
     // Details: common sources
@@ -728,135 +616,6 @@ export function initHelpPopup(glossaryData, tooltipsData, onOpenPanel) {
 }
 
 // ============================================
-// Profile Builder
-// ============================================
-
-/**
- * Render profile builder results
- * @param {Object} result - Result from findFatsForProfile
- * @param {Object} targetProfile - Original target profile
- * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {Set} lockedIndices - Set of locked fat indices
- * @param {Object} callbacks - {onUseRecipe, onFatInfo, onToggleLock}
- */
-export function renderProfileResults(result, targetProfile, fatsDatabase, lockedIndices, callbacks) {
-    const resultsContainer = $(ELEMENT_IDS.profileResults);
-    const suggestedRecipeDiv = $(ELEMENT_IDS.suggestedRecipe);
-    const achievedComparisonDiv = $(ELEMENT_IDS.achievedComparison);
-    const matchBarFill = $(ELEMENT_IDS.matchBarFill);
-    const matchPercent = $(ELEMENT_IDS.matchPercent);
-    const useRecipeBtn = $(ELEMENT_IDS.useRecipeBtn);
-    const signal = setupAbortSignal(suggestedRecipeDiv);
-
-    resultsContainer.classList.remove(CSS_CLASSES.hidden);
-
-    matchBarFill.style.width = `${result.matchQuality}%`;
-    matchPercent.textContent = `${result.matchQuality}%`;
-
-    // Use consistent itemRow component for fat list
-    const rows = result.recipe.map((fat, index) => {
-        const fatData = fatsDatabase[fat.id];
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            percentage: fat.percentage,
-            isLocked: lockedIndices.has(index)
-        }, index, {
-            showWeight: false,
-            showPercentage: true,
-            lockableField: 'percentage',
-            showRemoveButton: false,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    suggestedRecipeDiv.innerHTML = rows;
-
-    // Attach event handlers for fat info and lock toggle
-    attachRowEventHandlersWithSignal(suggestedRecipeDiv, {
-        onInfo: callbacks.onFatInfo,
-        onToggleLock: callbacks.onToggleLock
-    }, 'fat', signal);
-
-    // Render achieved vs target comparison
-    const comparisonItems = [];
-
-    for (const [acid, name] of Object.entries(FATTY_ACID_NAMES)) {
-        const targetVal = targetProfile[acid];
-        if (targetVal === undefined || targetVal === null || targetVal === '') continue;
-
-        const target = parseFloat(targetVal);
-        const achieved = result.achieved[acid] || 0;
-        const diff = achieved - target;
-        const absDiff = Math.abs(diff);
-
-        let statusClass = CSS_CLASSES.good;
-        if (absDiff > MATCH_THRESHOLDS.OFF) statusClass = CSS_CLASSES.off;
-        else if (absDiff > MATCH_THRESHOLDS.CLOSE) statusClass = CSS_CLASSES.close;
-
-        const diffSign = diff > 0 ? '+' : '';
-        const diffClass = diff > 0 ? 'positive' : 'negative';
-
-        comparisonItems.push(`
-            <div class="achieved-item ${statusClass}">
-                <span class="achieved-acid">${name}</span>
-                <span class="achieved-values">
-                    <span class="target">${target.toFixed(0)}%</span>
-                    <span class="arrow">&rarr;</span>
-                    <span class="achieved">${achieved.toFixed(0)}%</span>
-                    <span class="diff ${diffClass}">(${diffSign}${diff.toFixed(0)})</span>
-                </span>
-            </div>
-        `);
-    }
-
-    achievedComparisonDiv.innerHTML = comparisonItems.join('');
-    useRecipeBtn.onclick = () => callbacks.onUseRecipe(result.recipe);
-}
-
-/**
- * Hide profile results section
- */
-export function hideProfileResults() {
-    const resultsContainer = $(ELEMENT_IDS.profileResults);
-    if (resultsContainer) resultsContainer.classList.add(CSS_CLASSES.hidden);
-}
-
-/**
- * Get property targets from the profile builder inputs
- * @returns {Object} Target property values
- */
-export function getPropertyTargets() {
-    const targets = {};
-    const properties = ['hardness', 'degreasing', 'moisturizing', 'lather-volume', 'lather-density'];
-
-    properties.forEach(prop => {
-        const input = $(PROPERTY_ELEMENT_IDS.target[prop]);
-        if (input && input.value !== '') {
-            targets[prop] = parseFloatOr(input.value);
-        }
-    });
-
-    return targets;
-}
-
-/**
- * Get profile builder options
- * @param {Array} excludedFats - Array of fat ids to exclude
- * @returns {Object} Options for findFatsForProfile
- */
-export function getProfileBuilderOptions(excludedFats = []) {
-    const maxFats = parseIntOr($(ELEMENT_IDS.maxFats)?.value, 5);
-    const includeCastor = $(ELEMENT_IDS.includeCastor)?.checked || false;
-
-    return {
-        maxFats,
-        excludeFats: [...excludedFats],
-        requireFats: includeCastor ? ['castor-oil'] : []
-    };
-}
-
-// ============================================
 // Ingredient Exclusions
 // ============================================
 
@@ -950,128 +709,6 @@ export function populateExcludeFatSelect(selectElement, fatsDatabase, excludedFa
     populateSelect(selectElement, fatsDatabase, excludedFats);
 }
 
-/**
- * Clear profile builder inputs
- */
-export function clearProfileInputs() {
-    const properties = ['hardness', 'degreasing', 'moisturizing', 'lather-volume', 'lather-density'];
-
-    properties.forEach(prop => {
-        const input = $(PROPERTY_ELEMENT_IDS.target[prop]);
-        if (input) input.value = '';
-    });
-
-    hideProfileResults();
-}
-
-// ============================================
-// Cupboard Cleaner
-// ============================================
-
-/**
- * Render cupboard fats (weight input, no locks)
- * @param {HTMLElement} container - Container element
- * @param {Array} cupboardFats - Array of {id, weight}
- * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {string} unit - Unit string (g or oz)
- * @param {Object} callbacks - {onWeightChange, onRemove, onInfo}
- */
-export function renderCupboardFats(container, cupboardFats, fatsDatabase, unit, callbacks) {
-    const signal = setupAbortSignal(container);
-
-    if (cupboardFats.length === 0) {
-        container.innerHTML = renderEmptyState(UI_MESSAGES.NO_CUPBOARD_FATS);
-        return;
-    }
-
-    const totalWeight = cupboardFats.reduce((sum, fat) => sum + fat.weight, 0);
-
-    const rows = cupboardFats.map((fat, i) => {
-        const fatData = fatsDatabase[fat.id];
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            weight: fat.weight,
-            percentage: totalWeight > 0 ? ((fat.weight / totalWeight) * 100).toFixed(1) : 0
-        }, i, {
-            inputType: 'weight',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: null,
-            showRemoveButton: true,
-            unit,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    container.innerHTML = rows + renderTotalsRow('Total Fats', totalWeight, unit, 0);
-
-    // Attach event handlers with abort signal for cleanup
-    attachRowEventHandlersWithSignal(container, {
-        onWeightChange: callbacks.onWeightChange,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onInfo
-    }, 'fat', signal);
-}
-
-/**
- * Render cupboard suggestions (display only, no locks)
- * @param {HTMLElement} container - Container element
- * @param {Array} suggestions - Array of {id, weight, percentage}
- * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {string} unit - Unit string (g or oz)
- * @param {Object} callbacks - {onWeightChange, onRemove, onExclude, onInfo}
- */
-export function renderCupboardSuggestions(container, suggestions, fatsDatabase, unit, callbacks) {
-    const signal = setupAbortSignal(container);
-
-    if (suggestions.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-
-    const totalWeight = suggestions.reduce((sum, s) => sum + s.weight, 0);
-
-    const rows = suggestions.map((sugg, i) => {
-        const fatData = fatsDatabase[sugg.id];
-        return renderItemRow({
-            id: sugg.id,
-            name: fatData?.name || sugg.id,
-            weight: sugg.weight,
-            percentage: sugg.percentage,
-            isLocked: false
-        }, i, {
-            inputType: 'weight',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: null,  // No locks for suggestions
-            showExcludeButton: true,
-            unit,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    container.innerHTML = rows + renderTotalsRow('Total suggested', totalWeight, unit, 1);
-
-    // Attach event handlers with abort signal for cleanup
-    attachRowEventHandlersWithSignal(container, {
-        onWeightChange: callbacks.onWeightChange,
-        onRemove: callbacks.onRemove,
-        onExclude: callbacks.onExclude,
-        onInfo: callbacks.onInfo
-    }, 'fat', signal);
-}
-
-/**
- * Populate cupboard fat select dropdown
- * @param {HTMLSelectElement} selectElement - The select element
- * @param {Object} fatsDatabase - Fat database object
- * @param {Array} existingIds - IDs already in cupboard to exclude
- */
-export function populateCupboardFatSelect(selectElement, fatsDatabase, existingIds = []) {
-    populateSelect(selectElement, fatsDatabase, existingIds);
-}
-
 // ============================================
 // Settings Helpers
 // ============================================
@@ -1094,109 +731,6 @@ export function getSettings() {
 // ============================================
 // Additives
 // ============================================
-
-/**
- * Populate additive select dropdown
- * @param {HTMLSelectElement} selectElement - The select element
- * @param {Object} database - Pre-filtered database for the category
- * @param {Array} existingIds - IDs already in recipe to exclude
- * @param {Function|null} filterFn - Optional filter function (id, data) => boolean
- */
-export function populateAdditiveSelect(selectElement, database, existingIds = [], filterFn = null) {
-    populateSelect(selectElement, database, existingIds, filterFn);
-}
-
-/**
- * Render the recipe additives list
- * @param {HTMLElement} container - Container element
- * @param {Array} recipeAdditives - Array of {id, weight}
- * @param {Object} additivesDatabase - Additives database
- * @param {number} totalFatWeight - Total fat weight for percentage calculations
- * @param {string} unit - Unit string (g or oz)
- * @param {Object} callbacks - {onWeightChange, onRemove, onInfo}
- * @returns {Array} Array of warning objects from all additives
- */
-export function renderAdditives(container, recipeAdditives, additivesDatabase, totalFatWeight, unit, callbacks) {
-    const allWarnings = [];
-
-    if (recipeAdditives.length === 0) {
-        container.innerHTML = renderEmptyState(
-            UI_MESSAGES.NO_ADDITIVES_ADDED,
-            '',
-            'additive-empty'
-        );
-        return allWarnings;
-    }
-
-    const totalAdditiveWeight = recipeAdditives.reduce((sum, item) => sum + item.weight, 0);
-
-    const headerRow = `
-        <div class="item-row header-row cols-3">
-            <span>Additive</span>
-            <span>${unit}</span>
-            <span></span>
-        </div>
-    `;
-
-    const rows = recipeAdditives.map((item, i) => {
-        const additive = additivesDatabase[item.id];
-        if (!additive) return '';
-
-        const percentage = totalFatWeight > 0 ? (item.weight / totalFatWeight) * 100 : 0;
-        const warnings = checkAdditiveWarnings(additive, percentage);
-        allWarnings.push(...warnings.map(w => ({ ...w, additiveName: additive.name })));
-
-        // Determine warning class (highest severity wins)
-        let warningClass = '';
-        if (warnings.some(w => w.type === ADDITIVE_WARNING_TYPES.DANGER)) {
-            warningClass = 'danger';
-        } else if (warnings.some(w => w.type === ADDITIVE_WARNING_TYPES.WARNING)) {
-            warningClass = 'warning';
-        }
-
-        return renderItemRow({
-            id: item.id,
-            name: additive.name,
-            weight: item.weight,
-            percentage: percentage.toFixed(1),
-            isLocked: false,
-            hasWarning: !!warningClass,
-            warningClass
-        }, i, {
-            inputType: 'weight',
-            showWeight: true,
-            showPercentage: false,
-            lockableField: null,
-            unit,
-            itemType: 'additive'
-        });
-    }).join('');
-
-    const totalsRow = `
-        <div class="totals-row">
-            <span>Total</span>
-            <span>${totalAdditiveWeight.toFixed(1)} ${unit}</span>
-            <span></span>
-        </div>
-    `;
-
-    container.innerHTML = headerRow + rows + totalsRow;
-
-    // Store callbacks on container for dynamic lookup
-    container._callbacks = {
-        onWeightChange: callbacks.onWeightChange,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onInfo
-    };
-
-    // Only attach event handlers once per container
-    if (!container.dataset.handlersAttached) {
-        attachRowEventHandlers(container, container._callbacks, 'additive');
-        container.dataset.handlersAttached = 'true';
-    }
-
-    return allWarnings;
-}
 
 /**
  * Show additive info panel
@@ -1235,53 +769,28 @@ export function showAdditiveInfo(additiveId, additivesDatabase, sourcesData) {
     const usage = additive.details?.usage || additive.usage;
     const detailItems = [];
 
-    detailItems.push(`
-        <div class="panel-list-item">
-            <span class="panel-list-name">Recommended usage</span>
-            <span class="panel-list-value">${usage.min}–${usage.max}%</span>
-        </div>
-    `);
+    detailItems.push(panelListItem('Recommended usage', `${usage.min}–${usage.max}%`));
 
     const scentNote = additive.details?.scentNote || additive.scentNote;
     if (scentNote) {
-        detailItems.push(`
-            <div class="panel-list-item">
-                <span class="panel-list-name">Scent note</span>
-                <span class="panel-list-value">${scentNote}</span>
-            </div>
-        `);
+        detailItems.push(panelListItem('Scent note', scentNote));
     }
 
     const density = additive.details?.density || additive.density;
     if (density) {
-        detailItems.push(`
-            <div class="panel-list-item">
-                <span class="panel-list-name">Density</span>
-                <span class="panel-list-value">${density} g/mL</span>
-            </div>
-        `);
+        detailItems.push(panelListItem('Density', `${density} g/mL`));
     }
 
     const color = additive.details?.colour || additive.color;
     if (color) {
-        detailItems.push(`
-            <div class="panel-list-item">
-                <span class="panel-list-name">Colour</span>
-                <span class="panel-list-value"><span class="panel-colour-swatch" style="background-color: ${color}"></span></span>
-            </div>
-        `);
+        detailItems.push(panelListItem('Colour', `<span class="panel-colour-swatch" style="background-color: ${color}"></span>`));
     }
 
     if (additive.anchoring?.length > 0) {
         const anchorNames = additive.anchoring
             .map(id => additivesDatabase[id]?.name || id)
             .join(', ');
-        detailItems.push(`
-            <div class="panel-list-item">
-                <span class="panel-list-name">Anchors well with</span>
-                <span class="panel-list-value">${anchorNames}</span>
-            </div>
-        `);
+        detailItems.push(panelListItem('Anchors well with', anchorNames));
     }
 
     $('additivePanelDetails').innerHTML = detailItems.join('');
@@ -1294,19 +803,19 @@ export function showAdditiveInfo(additiveId, additivesDatabase, sourcesData) {
 
     if (safety) {
         if (safety.ifraCategory9Limit) {
-            safetyItems.push(`<div class="panel-list-item"><span class="panel-list-name">IFRA Category 9 limit</span><span class="panel-list-value">${safety.ifraCategory9Limit}%</span></div>`);
+            safetyItems.push(panelListItem('IFRA Category 9 limit', `${safety.ifraCategory9Limit}%`));
         }
         if (safety.maxConcentration) {
-            safetyItems.push(`<div class="panel-list-item"><span class="panel-list-name">Max concentration</span><span class="panel-list-value">${safety.maxConcentration}%</span></div>`);
+            safetyItems.push(panelListItem('Max concentration', `${safety.maxConcentration}%`));
         }
         if (safety.cosIng) {
-            safetyItems.push(`<div class="panel-list-item"><span class="panel-list-name">CosIng</span><span class="panel-list-value">${safety.cosIng}</span></div>`);
+            safetyItems.push(panelListItem('CosIng', safety.cosIng));
         }
         if (safety.casNumber) {
-            safetyItems.push(`<div class="panel-list-item"><span class="panel-list-name">CAS</span><span class="panel-list-value">${safety.casNumber}</span></div>`);
+            safetyItems.push(panelListItem('CAS', safety.casNumber));
         }
         if (safety.flashPointC) {
-            safetyItems.push(`<div class="panel-list-item"><span class="panel-list-name">Flash point</span><span class="panel-list-value">${safety.flashPointC}°C</span></div>`);
+            safetyItems.push(panelListItem('Flash point', `${safety.flashPointC}°C`));
         }
     }
 

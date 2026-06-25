@@ -193,7 +193,8 @@ export function renderEmptyState(message, subMessage = '', className = '') {
 }
 
 /**
- * Attach event handlers to a container with item rows
+ * Attach event handlers to a container with item rows.
+ * Pass `signal` to enable cleanup via AbortController.
  * @param {HTMLElement} container - Container element
  * @param {Object} callbacks - Event callbacks
  * @param {Function} [callbacks.onWeightChange] - Weight input handler (index, value)
@@ -203,121 +204,53 @@ export function renderEmptyState(message, subMessage = '', className = '') {
  * @param {Function} [callbacks.onExclude] - Exclude handler (id)
  * @param {Function} [callbacks.onInfo] - Info click handler (id)
  * @param {string} [itemType='fat'] - Item type for selectors
+ * @param {AbortSignal} [signal] - Optional AbortSignal for cleanup
  */
-export function attachRowEventHandlers(container, callbacks, itemType = 'fat') {
+export function attachRowEventHandlers(container, callbacks, itemType = 'fat', signal) {
     const nameSelector = '.item-name[data-action="info"]';
+    const options = signal ? { signal } : undefined;
+    const on = (selector, eventType, handler) =>
+        delegate(container, selector, eventType, handler, options);
 
     if (callbacks.onWeightChange) {
-        delegate(container, 'input[data-action="weight"]', 'input', (_e, el) => {
+        on('input[data-action="weight"]', 'input', (_e, el) => {
             callbacks.onWeightChange(parseInt(el.dataset.index, 10), el.value);
         });
     }
 
     if (callbacks.onPercentageChange) {
-        delegate(container, 'input[data-action="percentage"]', 'input', (_e, el) => {
+        on('input[data-action="percentage"]', 'input', (_e, el) => {
             callbacks.onPercentageChange(parseInt(el.dataset.index, 10), el.value);
         });
     }
 
     if (callbacks.onToggleLock) {
-        delegate(container, 'button[data-action="lock"]', 'click', (_e, el) => {
+        on('button[data-action="lock"]', 'click', (_e, el) => {
             callbacks.onToggleLock(parseInt(el.dataset.index, 10));
         });
     }
 
     if (callbacks.onRemove) {
-        delegate(container, 'button[data-action="remove"]', 'click', (_e, el) => {
+        on('button[data-action="remove"]', 'click', (_e, el) => {
             callbacks.onRemove(parseInt(el.dataset.index, 10));
         });
     }
 
     if (callbacks.onExclude) {
-        delegate(container, 'button[data-action="exclude"]', 'click', (_e, el) => {
+        on('button[data-action="exclude"]', 'click', (_e, el) => {
             callbacks.onExclude(el.dataset.id);
         });
     }
 
     if (callbacks.onInfo) {
-        delegate(container, nameSelector, 'click', (_e, el) => {
+        const fireInfo = (el) => {
             const id = el.dataset[itemType] || el.dataset.fat || el.dataset.additive;
             callbacks.onInfo(id);
-        });
-
-        delegate(container, nameSelector, 'keydown', onActivate((e) => {
+        };
+        on(nameSelector, 'click', (_e, el) => fireInfo(el));
+        on(nameSelector, 'keydown', onActivate((e) => {
             const el = e.target.closest(nameSelector);
-            if (el) {
-                const id = el.dataset[itemType] || el.dataset.fat || el.dataset.additive;
-                callbacks.onInfo(id);
-            }
+            if (el) fireInfo(el);
         }));
-    }
-}
-
-/**
- * Attach event handlers with AbortSignal support for cleanup
- * @param {HTMLElement} container - Container element
- * @param {Object} callbacks - Event callbacks
- * @param {string} [itemType='fat'] - Item type for selectors
- * @param {AbortSignal} signal - AbortSignal for cleanup
- */
-export function attachRowEventHandlersWithSignal(container, callbacks, itemType = 'fat', signal) {
-    const nameSelector = '.item-name[data-action="info"]';
-
-    // Helper to add delegated event listener with abort signal
-    const addDelegated = (selector, eventType, handler) => {
-        container.addEventListener(eventType, (e) => {
-            const target = e.target.closest(selector);
-            if (target && container.contains(target)) {
-                handler(e, target);
-            }
-        }, { signal });
-    };
-
-    if (callbacks.onWeightChange) {
-        addDelegated('input[data-action="weight"]', 'input', (_e, el) => {
-            callbacks.onWeightChange(parseInt(el.dataset.index, 10), el.value);
-        });
-    }
-
-    if (callbacks.onPercentageChange) {
-        addDelegated('input[data-action="percentage"]', 'input', (_e, el) => {
-            callbacks.onPercentageChange(parseInt(el.dataset.index, 10), el.value);
-        });
-    }
-
-    if (callbacks.onToggleLock) {
-        addDelegated('button[data-action="lock"]', 'click', (_e, el) => {
-            callbacks.onToggleLock(parseInt(el.dataset.index, 10));
-        });
-    }
-
-    if (callbacks.onRemove) {
-        addDelegated('button[data-action="remove"]', 'click', (_e, el) => {
-            callbacks.onRemove(parseInt(el.dataset.index, 10));
-        });
-    }
-
-    if (callbacks.onExclude) {
-        addDelegated('button[data-action="exclude"]', 'click', (_e, el) => {
-            callbacks.onExclude(el.dataset.id);
-        });
-    }
-
-    if (callbacks.onInfo) {
-        addDelegated(nameSelector, 'click', (_e, el) => {
-            const id = el.dataset[itemType] || el.dataset.fat || el.dataset.additive;
-            callbacks.onInfo(id);
-        });
-
-        addDelegated(nameSelector, 'keydown', (e, _el) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                const el = e.target.closest(nameSelector);
-                if (el) {
-                    const id = el.dataset[itemType] || el.dataset.fat || el.dataset.additive;
-                    callbacks.onInfo(id);
-                }
-            }
-        });
     }
 }

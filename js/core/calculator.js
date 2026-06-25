@@ -1,6 +1,6 @@
 /**
  * Pure calculation functions for soapmaking
- * No DOM dependencies - can be unit tested independently
+ * No DOM dependencies to enable independent unit testing
  */
 
 import {
@@ -16,11 +16,11 @@ import {
 } from '../lib/constants.js';
 
 // ============================================
-// Core Calculations
+// Core calculations
 // ============================================
 
 /**
- * Calculate lye amount needed for saponification
+ * Calculate lye required
  * @param {Array} recipe - Array of {id, weight} objects
  * @param {Object} fatsDatabase - Fat data with SAP values
  * @param {string} lyeType - 'NaOH' or 'KOH'
@@ -48,12 +48,13 @@ export function calculateWater(lyeAmount, waterRatio) {
 }
 
 /**
- * Core fatty acid calculation - calculates weighted fatty acid profile
+ * Core fatty acid calculation; calculates weighted fatty acid profile
  * @param {Array} recipe - Array of {id, value} objects
  * @param {Object} fatsDatabase - Fat data with fatty acid profiles
  * @param {string} valueKey - Property name for the value ('weight' or 'percentage')
  * @returns {Object} Weighted fatty acid percentages
  */
+
 function calculateFattyAcidsCore(recipe, fatsDatabase, valueKey) {
     const fa = initFattyAcids();
     const total = recipe.reduce((sum, item) => sum + item[valueKey], 0);
@@ -316,14 +317,14 @@ function checkHardness(properties) {
         return {
             type: NOTE_TYPES.WARNING,
             icon: NOTE_ICONS.SOFT_BAR,
-            text: `Soft bar (hardness ${properties.hardness.toFixed(0)}): may need 48-72hrs to unmould. Sodium lactate or salt can help speed this up.`
+            text: `Soft bar; may take a longer time to unmould and disappear more quickly down the drain. Sodium lactate or salt can help speed curing time.`
         };
     }
     if (properties.hardness > R.hardness.max) {
         return {
             type: NOTE_TYPES.INFO,
             icon: NOTE_ICONS.HARD_BAR,
-            text: `Very hard bar (hardness ${properties.hardness.toFixed(0)}): may be brittle or waxy. Cut promptly after unmoulding to avoid cracking.`
+            text: `Very hard bar; may be brittle or waxy; if moulding the soap as a loaf that you plan to cut into bars, cut it before curing to lower the chances of cracking.`
         };
     }
     return null;
@@ -339,14 +340,14 @@ function checkDegreasing(properties) {
         return {
             type: NOTE_TYPES.INFO,
             icon: NOTE_ICONS.HIGH_CLEANSING,
-            text: `High degreasing (${properties.degreasing.toFixed(0)}): excellent for kitchen/utility soap. May strip skin if used daily on face or sensitive areas.`
+            text: `High degreasing ability; excellent for utility soap, but frequent use will dry your skin.`
         };
     }
     if (properties.degreasing < T.LOW_DEGREASING) {
         return {
             type: NOTE_TYPES.INFO,
             icon: NOTE_ICONS.LOW_CLEANSING,
-            text: `Low degreasing (${properties.degreasing.toFixed(0)}): very gentle, good for sensitive skin. Some users may feel it doesn't "clean" enough.`
+            text: `Low degreasing ability; good for sensitive skin, but not appropriate for high-cleansing needs like kitchen or workshop soaps.`
         };
     }
     return null;
@@ -363,7 +364,7 @@ function checkShelfStability(_properties, fa) {
         return {
             type: NOTE_TYPES.WARNING,
             icon: NOTE_ICONS.SHELF_STABILITY,
-            text: `High polyunsaturates (${polyunsaturated.toFixed(0)}%): prone to DOS (rancidity). Add antioxidant (ROE/Vitamin E), cure in cool dark place, use within 8-12 months.`
+            text: `High polyunsaturate content; prone to rancidity (Dreaded Orange Spots). Mitigate by adding an antioxidant (e.g. 0.02% - 0.05% of total fat weight of rosemary oleoresin extract); curing in a cool, dark place; and using within 8 to 12 months.`
         };
     }
     return null;
@@ -379,7 +380,7 @@ function checkLinolenic(_properties, fa) {
         return {
             type: NOTE_TYPES.WARNING,
             icon: NOTE_ICONS.LINOLENIC,
-            text: `High linolenic acid (${fa.linolenic.toFixed(0)}%): very unstable. Consider reducing high-linolenic fats (hemp, flax) to under 5% of recipe.`
+            text: `High linolenic acid content; very unstable and especially prone to rancidity. Either reduce the ratio of high-linolenic fats to under 5% or accept a shorter shelf life.`
         };
     }
     return null;
@@ -395,7 +396,7 @@ function checkLather(properties) {
         return {
             type: NOTE_TYPES.INFO,
             icon: NOTE_ICONS.LOW_LATHER,
-            text: 'Low lather recipe: consider adding coconut oil (bubbles) or castor oil (lather stability) if more lather is desired.'
+            text: `Low lathering capability; this doesn't affect cleansing ability, but if you want to improve the textural experience on skin, consider adding coconut oil for bubbles or castor oil for lather stability.`
         };
     }
     return null;
@@ -411,7 +412,7 @@ function checkMoisturizingBalance(properties) {
         return {
             type: NOTE_TYPES.INFO,
             icon: NOTE_ICONS.CONDITIONING_BALANCE,
-            text: 'Highly moisturizing but soft: luxurious feel but bar may not last long in shower. Consider adding palm or tallow for balance.'
+            text: `Highly moisturizing; will feel luxurious but may not last long in the shower. Mitigate by adding hard fats high in palmitic or stearic acid (tallow, lard, palm) or sodium lactate for bar hardness.`
         };
     }
     return null;
@@ -428,7 +429,7 @@ function checkCastorOpportunity(properties, _fa, recipe) {
         return {
             type: NOTE_TYPES.SUCCESS,
             icon: NOTE_ICONS.TIP,
-            text: 'Tip: Adding 3-5% castor oil can significantly boost lather stability without affecting other properties much.'
+            text: `Adding 3 - 5% castor oil can significantly boost lather stability without affecting other properties much.`
         };
     }
     return null;
@@ -449,7 +450,7 @@ function checkGoodBalance(properties, fa) {
         return {
             type: NOTE_TYPES.SUCCESS,
             icon: NOTE_ICONS.GOOD,
-            text: 'Well-balanced recipe: good hardness, degreasing, and moisturizing within recommended ranges.'
+            text: `Well-balanced recipe with good hardness, degreasing, and moisturizing abilities within recommended ranges.`
         };
     }
     return null;

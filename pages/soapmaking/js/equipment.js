@@ -5,7 +5,8 @@
 
 import { $ } from '../../../js/ui/helpers.js';
 import { TIMING } from '../../../js/lib/constants.js';
-import { resolveReferences } from '../../../js/lib/references.js';
+import { renderReferencesHtml } from '../../../js/lib/references.js';
+import { setupCategoryFilters } from './filters.js';
 
 let equipmentData = {};
 let sourcesData = {};
@@ -19,19 +20,6 @@ async function loadEquipment() {
     equipmentData = await equipmentResponse.json();
     sourcesData = await sourcesResponse.json();
     renderEquipment();
-}
-
-function renderReferencesHtml(references) {
-    if (!references || references.length === 0) return '';
-    const refs = resolveReferences(references, sourcesData);
-    return `
-        <div class="entry-references">
-            <span class="references-label">References:</span>
-            ${refs.map(ref => `
-                <a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="reference-link">${ref.source}</a>
-            `).join('')}
-        </div>
-    `;
 }
 
 function renderEquipment() {
@@ -85,53 +73,16 @@ function renderEquipment() {
                     ` : ''}
                 </details>
             ` : ''}
-            ${renderReferencesHtml(data.references)}
+            ${renderReferencesHtml(data.references, sourcesData)}
         </article>
     `).join('');
 }
 
-function setCategory(category) {
-    currentCategory = category;
-    document.querySelectorAll('.page-filter').forEach(btn => {
-        const isActive = btn.dataset.category === category;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-    renderEquipment();
-}
-
-function getCategoryFromHash() {
-    const hash = window.location.hash.slice(1);
-    const validCategories = ['all', 'safety', 'measuring', 'mixing', 'mould'];
-    return validCategories.includes(hash) ? hash : 'all';
-}
-
-function initFilters() {
-    document.querySelectorAll('.page-filter').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const category = btn.dataset.category;
-            window.location.hash = category === 'all' ? '' : category;
-        });
-    });
-
-    window.addEventListener('hashchange', () => {
-        setCategory(getCategoryFromHash());
-    });
-}
-
-// Restore state when page is restored from bfcache
-window.addEventListener('pageshow', (event) => {
-    if (event.persisted) {
-        setCategory(getCategoryFromHash());
+currentCategory = setupCategoryFilters({
+    validCategories: ['all', 'safety', 'measuring', 'mixing', 'mould'],
+    onChange: (category) => {
+        currentCategory = category;
+        renderEquipment();
     }
 });
-
-// Initialize with category from URL hash
-currentCategory = getCategoryFromHash();
-document.querySelectorAll('.page-filter').forEach(btn => {
-    const isActive = btn.dataset.category === currentCategory;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-});
 loadEquipment();
-initFilters();

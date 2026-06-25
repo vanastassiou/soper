@@ -5,7 +5,8 @@
 
 import { $ } from '../../../js/ui/helpers.js';
 import { TIMING } from '../../../js/lib/constants.js';
-import { resolveReferences } from '../../../js/lib/references.js';
+import { renderReferencesHtml } from '../../../js/lib/references.js';
+import { setupCategoryFilters } from './filters.js';
 
 let fatsData = {};
 let fragrancesData = {};
@@ -55,19 +56,6 @@ async function loadIngredients() {
             container.innerHTML = `<p class="no-results">Failed to load ingredients. Please try refreshing the page.</p>`;
         }
     }
-}
-
-function renderReferencesHtml(references) {
-    if (!references || references.length === 0) return '';
-    const refs = resolveReferences(references, sourcesData);
-    return `
-        <div class="entry-references">
-            <span class="references-label">References:</span>
-            ${refs.map(ref => `
-                <a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="reference-link">${ref.source}</a>
-            `).join('')}
-        </div>
-    `;
 }
 
 function renderFatCard(key, data) {
@@ -129,7 +117,7 @@ function renderFatCard(key, data) {
                 </div>
             ` : ''}
 
-            ${renderReferencesHtml(data.references)}
+            ${renderReferencesHtml(data.references, sourcesData)}
         </article>
     `;
 }
@@ -206,7 +194,7 @@ function renderAdditiveCard(key, data) {
                 </div>
             ` : ''}
 
-            ${renderReferencesHtml(data.references)}
+            ${renderReferencesHtml(data.references, sourcesData)}
         </article>
     `;
 }
@@ -255,50 +243,11 @@ function renderIngredients() {
     }).join('');
 }
 
-function setCategory(category) {
-    currentCategory = category;
-    document.querySelectorAll('.page-filter').forEach(btn => {
-        const isActive = btn.dataset.category === category;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-    renderIngredients();
-}
-
-function getCategoryFromHash() {
-    const hash = window.location.hash.slice(1);
-    const validCategories = ['all', 'fats', 'fragrances', 'colourants', 'soap-performance', 'skin-care'];
-    return validCategories.includes(hash) ? hash : 'all';
-}
-
-function initFilters() {
-    document.querySelectorAll('.page-filter').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const category = btn.dataset.category;
-            window.location.hash = category === 'all' ? '' : category;
-        });
-    });
-
-    // Handle browser back/forward
-    window.addEventListener('hashchange', () => {
-        setCategory(getCategoryFromHash());
-    });
-}
-
-// Restore state when page is restored from bfcache
-window.addEventListener('pageshow', (event) => {
-    if (event.persisted) {
-        setCategory(getCategoryFromHash());
+currentCategory = setupCategoryFilters({
+    validCategories: ['all', 'fats', 'fragrances', 'colourants', 'soap-performance', 'skin-care'],
+    onChange: (category) => {
+        currentCategory = category;
+        renderIngredients();
     }
 });
-
-// Initialize with category from URL hash
-currentCategory = getCategoryFromHash();
-// Set initial button state before data loads
-document.querySelectorAll('.page-filter').forEach(btn => {
-    const isActive = btn.dataset.category === currentCategory;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-});
 loadIngredients();
-initFilters();
