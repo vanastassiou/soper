@@ -6,6 +6,7 @@
 import * as calc from './core/calculator.js';
 import * as optimizer from './core/optimizer.js';
 import { DEFAULTS, ELEMENT_IDS, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES } from './lib/constants.js';
+import { hasSignificantEthicalConcerns } from './lib/dietary.js';
 import * as validation from './lib/validation.js';
 import {
     addExclusion, clearRecipe,
@@ -315,28 +316,6 @@ function getDietaryFilters() {
 }
 
 /**
- * Check if an ingredient has significant ethical concerns
- * Significant = any social/political concerns, or 2+ environmental concerns
- * @param {Object} data - Ingredient data object
- * @returns {boolean} True if significant concerns exist
- */
-function hasSignificantEthicalConcerns(data) {
-    const concerns = data.ethicalConcerns;
-    if (!concerns) return false;
-
-    const environmental = concerns.environmental || [];
-    const social = concerns.social || [];
-    const political = concerns.political || [];
-
-    // Any social or political concerns are significant
-    if (social.length > 0 || political.length > 0) return true;
-    // Multiple environmental concerns are significant
-    if (environmental.length >= 2) return true;
-
-    return false;
-}
-
-/**
  * Create a filter function based on current dietary filter settings and manual exclusions
  * Applies to all ingredient types (fats, colourants, fragrances, etc.)
  * @returns {Function|null} Filter function or null if no filters active
@@ -396,6 +375,13 @@ function getCombinedExclusions() {
 // ============================================
 
 let currentBuildMode = 'fats';
+
+const BUILD_MODES = [
+    { name: 'fats',       panelId: ELEMENT_IDS.selectFatsMode,        descriptionId: 'fatsDescription' },
+    { name: 'properties', panelId: ELEMENT_IDS.specifyPropertiesMode, descriptionId: 'propertiesDescription' },
+    { name: 'yolo',       panelId: ELEMENT_IDS.yoloMode,              descriptionId: 'yoloDescription' },
+    { name: 'cupboard',   panelId: ELEMENT_IDS.cupboardCleanerMode,   descriptionId: 'cupboardDescription' }
+];
 
 function updateTabStates(tabSelector, dataAttr, activeValue) {
     document.querySelectorAll(tabSelector).forEach(tab => {
@@ -477,17 +463,10 @@ function switchBuildMode(mode, skipWarning = false) {
     currentBuildMode = mode;
     updateTabStates('.build-mode-tab', 'mode', mode);
 
-    // Show/hide mode panels
-    $(ELEMENT_IDS.selectFatsMode).classList.toggle('hidden', mode !== 'fats');
-    $(ELEMENT_IDS.specifyPropertiesMode).classList.toggle('hidden', mode !== 'properties');
-    $(ELEMENT_IDS.yoloMode)?.classList.toggle('hidden', mode !== 'yolo');
-    $(ELEMENT_IDS.cupboardCleanerMode)?.classList.toggle('hidden', mode !== 'cupboard');
-
-    // Show/hide mode descriptions
-    $('fatsDescription')?.classList.toggle('hidden', mode !== 'fats');
-    $('propertiesDescription')?.classList.toggle('hidden', mode !== 'properties');
-    $('yoloDescription')?.classList.toggle('hidden', mode !== 'yolo');
-    $('cupboardDescription')?.classList.toggle('hidden', mode !== 'cupboard');
+    for (const { name, panelId, descriptionId } of BUILD_MODES) {
+        $(panelId)?.classList.toggle('hidden', mode !== name);
+        $(descriptionId)?.classList.toggle('hidden', mode !== name);
+    }
 
     hideProfileResults();
 

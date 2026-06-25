@@ -15,34 +15,13 @@ import {
     isValidTarget,
     allPropertiesInRange
 } from '../lib/constants.js';
+import { hasSignificantEthicalConcerns } from '../lib/dietary.js';
 
 import { calculateProperties, calculateFattyAcidsFromPercentages } from './calculator.js';
 
 // ============================================
 // Dietary Filtering
 // ============================================
-
-/**
- * Check if an ingredient has significant ethical concerns
- * Significant = any social/political concerns, or 2+ environmental concerns
- * @param {Object} item - Ingredient data object
- * @returns {boolean} True if significant concerns exist
- */
-function hasSignificantEthicalConcerns(item) {
-    const concerns = item.ethicalConcerns;
-    if (!concerns) return false;
-
-    const environmental = concerns.environmental || [];
-    const social = concerns.social || [];
-    const political = concerns.political || [];
-
-    // Any social or political concerns are significant
-    if (social.length > 0 || political.length > 0) return true;
-    // Multiple environmental concerns are significant
-    if (environmental.length >= 2) return true;
-
-    return false;
-}
 
 /**
  * Filter ingredients based on dietary requirements
