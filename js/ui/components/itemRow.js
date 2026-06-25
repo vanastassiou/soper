@@ -4,7 +4,7 @@
  */
 
 import { CSS_CLASSES, UI_ICONS } from '../../lib/constants.js';
-import { delegate, onActivate, setupAbortSignal } from '../helpers.js';
+import { delegate, formatWeight, onActivate, setupAbortSignal } from '../helpers.js';
 
 /**
  * @typedef {Object} RowConfig
@@ -25,7 +25,6 @@ import { delegate, onActivate, setupAbortSignal } from '../helpers.js';
  * @property {'weight'|'percentage'|null} [lockableField=null] - Which field can be locked
  * @property {boolean} [showRemoveButton=true] - Show remove button
  * @property {boolean} [showExcludeButton=false] - Show exclude button (for YOLO/Cupboard modes)
- * @property {string} [unit='g'] - Unit for weight display/input
  * @property {string} [itemType='fat'] - Type for data attributes ('fat' or 'additive')
  * @property {string} [className=''] - Additional CSS class(es) for the row
  */
@@ -45,7 +44,6 @@ export function renderItemRow(config, index, options = {}) {
         lockableField = null,
         showRemoveButton = true,
         showExcludeButton = false,
-        unit = 'g',
         itemType = 'fat',
         className = ''
     } = options;
@@ -91,14 +89,14 @@ export function renderItemRow(config, index, options = {}) {
 
         if (isWeightInput) {
             weightCell = `<div class="weight-cell">
-                   <input type="number" value="${weight}" min="0" step="1" data-action="weight" data-index="${index}" aria-label="${name} weight in ${unit}">
-                   <span class="unit-label">${unit}</span>
+                   <input type="number" value="${weight}" min="0" step="1" data-action="weight" data-index="${index}" aria-label="${name} weight in grams">
+                   <span class="unit-label">g</span>
                    ${lockBtn}
                </div>`;
         } else {
             // Display-only weight (calculated from percentage)
             weightCell = `<div class="weight-cell">
-                   <span class="${itemType}-weight" aria-label="${name} weight">${weight} ${unit}</span>
+                   <span class="${itemType}-weight" aria-label="${name} weight">${weight} g</span>
                    ${lockBtn}
                </div>`;
         }
@@ -158,18 +156,17 @@ export function renderItemRow(config, index, options = {}) {
 /**
  * Render a totals row
  * @param {string} label - Row label (e.g., "Total Fats")
- * @param {number} total - Total value
- * @param {string} unit - Unit string
+ * @param {number} total - Total weight in grams
  * @param {number} [emptyCells=2] - Number of empty cells to add
  * @param {string} [className=''] - Additional CSS class
  * @returns {string} HTML string for totals row
  */
-export function renderTotalsRow(label, total, unit, emptyCells = 2, className = '') {
+export function renderTotalsRow(label, total, emptyCells = 2, className = '') {
     const empty = '<span></span>'.repeat(emptyCells);
     return `
         <div class="totals-row ${className}">
             <span>${label}</span>
-            <span>${total.toFixed(2)} ${unit}</span>
+            <span>${formatWeight(total)}</span>
             <span>100%</span>
             ${empty}
         </div>

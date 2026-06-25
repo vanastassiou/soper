@@ -258,20 +258,13 @@ export function generateFatProperties(fat, fattyAcidsData) {
  * Calculate estimated volume range of soap batch
  * @param {Array} recipe - [{id, weight}, ...]
  * @param {Object} fatsDatabase - Fat data with density values
- * @param {number} lyeAmount - Lye weight (same unit as fat weights)
- * @param {number} waterAmount - Water weight (same unit as fat weights)
- * @param {string} unit - 'g' or 'oz'
- * @returns {{min: number, max: number}} Volume range in mL or fl oz
+ * @param {number} lyeAmount - Lye weight in grams
+ * @param {number} waterAmount - Water weight in grams
+ * @returns {{min: number, max: number}} Volume range in mL
  */
-export function calculateVolume(recipe, fatsDatabase, lyeAmount, waterAmount, unit) {
+export function calculateVolume(recipe, fatsDatabase, lyeAmount, waterAmount) {
     const totalFatWeight = recipe.reduce((sum, fat) => sum + fat.weight, 0);
     if (totalFatWeight === 0) return { min: 0, max: 0 };
-
-    // Convert to grams if needed (density is g/mL)
-    const isImperial = unit === 'imperial';
-    const fatWeightG = isImperial ? totalFatWeight * VOLUME.G_PER_OZ : totalFatWeight;
-    const lyeWeightG = isImperial ? lyeAmount * VOLUME.G_PER_OZ : lyeAmount;
-    const waterWeightG = isImperial ? waterAmount * VOLUME.G_PER_OZ : waterAmount;
 
     // Calculate weighted average fat density
     const avgFatDensity = recipe.reduce((sum, fat) => {
@@ -281,26 +274,17 @@ export function calculateVolume(recipe, fatsDatabase, lyeAmount, waterAmount, un
     }, 0);
 
     // Volume components in mL
-    const fatVolumeML = fatWeightG / avgFatDensity;
-    const waterVolumeML = waterWeightG / VOLUME.WATER_DENSITY;
-    const lyeVolumeML = lyeWeightG / VOLUME.NAOH_DENSITY;
+    const fatVolumeML = totalFatWeight / avgFatDensity;
+    const waterVolumeML = waterAmount / VOLUME.WATER_DENSITY;
+    const lyeVolumeML = lyeAmount / VOLUME.NAOH_DENSITY;
 
     // Base volume with saponification reduction
     const baseVolumeML = (fatVolumeML + waterVolumeML + lyeVolumeML) * VOLUME.SAPONIFICATION_REDUCTION;
 
-    // Apply uncertainty range
-    const minML = Math.round(baseVolumeML * VOLUME.UNCERTAINTY_MIN);
-    const maxML = Math.round(baseVolumeML * VOLUME.UNCERTAINTY_MAX);
-
-    // Convert to fl oz if user is in imperial mode
-    if (isImperial) {
-        return {
-            min: Math.round(minML / VOLUME.ML_PER_FLOZ),
-            max: Math.round(maxML / VOLUME.ML_PER_FLOZ)
-        };
-    }
-
-    return { min: minML, max: maxML };
+    return {
+        min: Math.round(baseVolumeML * VOLUME.UNCERTAINTY_MIN),
+        max: Math.round(baseVolumeML * VOLUME.UNCERTAINTY_MAX)
+    };
 }
 
 // ============================================
@@ -490,11 +474,10 @@ export function getRecipeNotes(properties, fa, recipe) {
  * Calculate additive amount based on fat weight
  * @param {Object} additive - Additive data from database
  * @param {number} usagePercent - User-specified usage percentage
- * @param {number} totalFatWeight - Total weight of fats in recipe
- * @param {string} unit - 'g' or 'oz'
- * @returns {number} Calculated weight in specified unit
+ * @param {number} totalFatWeight - Total weight of fats in recipe (grams)
+ * @returns {number} Calculated weight in grams
  */
-export function calculateAdditiveAmount(additive, usagePercent, totalFatWeight, unit) {
+export function calculateAdditiveAmount(additive, usagePercent, totalFatWeight) {
     if (!additive || totalFatWeight <= 0) return 0;
 
     // Currently all additives use fat-weight basis
@@ -548,11 +531,10 @@ export function checkAdditiveWarnings(additive, usagePercent) {
  * Calculate total additives weight and breakdown
  * @param {Array} recipeAdditives - Array of {id, weight}
  * @param {Object} additivesDatabase - Additives data
- * @param {number} totalFatWeight - Total fat weight
- * @param {string} unit - 'g' or 'oz'
+ * @param {number} totalFatWeight - Total fat weight (grams)
  * @returns {{totalWeight: number, breakdown: Array}}
  */
-export function calculateAdditivesTotal(recipeAdditives, additivesDatabase, totalFatWeight, unit) {
+export function calculateAdditivesTotal(recipeAdditives, additivesDatabase, totalFatWeight) {
     const breakdown = recipeAdditives.map(item => {
         const additive = additivesDatabase[item.id];
         if (!additive) return null;
@@ -576,14 +558,11 @@ export function calculateAdditivesTotal(recipeAdditives, additivesDatabase, tota
  * Calculate additive volume contribution
  * @param {Array} recipeAdditives - Additives in recipe {id, weight}
  * @param {Object} additivesDatabase - Database
- * @param {number} totalFatWeight - Total fat weight (unused, kept for API compatibility)
- * @param {string} unit - 'metric' or 'imperial'
  * @returns {number} Volume in mL
  */
-export function calculateAdditiveVolume(recipeAdditives, additivesDatabase, totalFatWeight, unit) {
-    const conversionFactor = unit === 'imperial' ? VOLUME.G_PER_OZ : 1;
+export function calculateAdditiveVolume(recipeAdditives, additivesDatabase) {
     return recipeAdditives.reduce((sum, item) => {
         const density = additivesDatabase[item.id]?.density ?? 1.0;
-        return sum + (item.weight * conversionFactor) / density;
+        return sum + item.weight / density;
     }, 0);
 }

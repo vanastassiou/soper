@@ -5,7 +5,7 @@
  */
 
 import { $, setVisibility } from '../../ui/helpers.js';
-import { CSS_CLASSES, ELEMENT_IDS, UI_MESSAGES, getWeightLabel } from '../../lib/constants.js';
+import { CSS_CLASSES, ELEMENT_IDS, UI_MESSAGES } from '../../lib/constants.js';
 import { toast } from '../../ui/components/toast.js';
 import * as optimizer from '../../core/optimizer.js';
 import {
@@ -21,7 +21,6 @@ import {
     updateCupboardFatWeight,
     updateCupboardSuggestionWeight
 } from '../../state/state.js';
-import { getSettings } from '../../ui/ui.js';
 import { updatePropertiesFromFats } from '../../ui/properties.js';
 import {
     populateCupboardFatSelect,
@@ -158,9 +157,7 @@ export function renderCupboardFatsList() {
     const container = $(ELEMENT_IDS.cupboardFats);
     if (!container) return;
 
-    const settings = getSettings();
-
-    renderCupboardFats(container, state.cupboardFats, state.fatsDatabase, getWeightLabel(settings.unit), {
+    renderCupboardFats(container, state.cupboardFats, state.fatsDatabase, {
         onWeightChange: handleCupboardWeightChange,
         onRemove: handleRemoveCupboardFat,
         onInfo: deps.createFatInfoHandler(() => state.cupboardFats)
@@ -173,13 +170,10 @@ export function renderCupboardSuggestionsList() {
     const container = $(ELEMENT_IDS.cupboardSuggestions);
     if (!container) return;
 
-    const settings = getSettings();
-
     renderCupboardSuggestions(
         container,
         state.cupboardSuggestions,
         state.fatsDatabase,
-        getWeightLabel(settings.unit),
         {
             onWeightChange: handleCupboardSuggestionWeightChange,
             onRemove: handleRemoveCupboardSuggestion,

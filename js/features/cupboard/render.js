@@ -16,12 +16,11 @@ import { UI_MESSAGES } from '../../lib/constants.js';
  * only in which trailing button each row shows, which totals label is used,
  * and which callbacks are passed through.
  */
-function renderCupboardList(container, items, fatsDatabase, unit, callbacks, options) {
+function renderCupboardList(container, items, fatsDatabase, callbacks, options) {
     const {
         emptyMessage,
         rowOptions,
-        totalsLabel,
-        totalsPrecision
+        totalsLabel
     } = options;
 
     const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
@@ -30,7 +29,7 @@ function renderCupboardList(container, items, fatsDatabase, unit, callbacks, opt
         emptyMessage,
         callbacks,
         totals: items.length > 0
-            ? renderTotalsRow(totalsLabel, totalWeight, unit, totalsPrecision)
+            ? renderTotalsRow(totalsLabel, totalWeight)
             : '',
         rowFor: (item, i) => {
             const fatData = fatsDatabase[item.id];
@@ -49,7 +48,6 @@ function renderCupboardList(container, items, fatsDatabase, unit, callbacks, opt
                 showWeight: true,
                 showPercentage: true,
                 lockableField: null,
-                unit,
                 itemType: 'fat',
                 ...rowOptions
             });
@@ -62,15 +60,13 @@ function renderCupboardList(container, items, fatsDatabase, unit, callbacks, opt
  * @param {HTMLElement} container - Container element
  * @param {Array} cupboardFats - Array of {id, weight}
  * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {string} unit - Unit string (g or oz)
  * @param {Object} callbacks - {onWeightChange, onRemove, onInfo}
  */
-export function renderCupboardFats(container, cupboardFats, fatsDatabase, unit, callbacks) {
-    renderCupboardList(container, cupboardFats, fatsDatabase, unit, callbacks, {
+export function renderCupboardFats(container, cupboardFats, fatsDatabase, callbacks) {
+    renderCupboardList(container, cupboardFats, fatsDatabase, callbacks, {
         emptyMessage: UI_MESSAGES.NO_CUPBOARD_FATS,
         rowOptions: { showRemoveButton: true },
-        totalsLabel: 'Total Fats',
-        totalsPrecision: 0
+        totalsLabel: 'Total Fats'
     });
 }
 
@@ -79,14 +75,12 @@ export function renderCupboardFats(container, cupboardFats, fatsDatabase, unit, 
  * @param {HTMLElement} container - Container element
  * @param {Array} suggestions - Array of {id, weight, percentage}
  * @param {Object} fatsDatabase - Fat database for name lookups
- * @param {string} unit - Unit string (g or oz)
  * @param {Object} callbacks - {onWeightChange, onRemove, onExclude, onInfo}
  */
-export function renderCupboardSuggestions(container, suggestions, fatsDatabase, unit, callbacks) {
-    renderCupboardList(container, suggestions, fatsDatabase, unit, callbacks, {
+export function renderCupboardSuggestions(container, suggestions, fatsDatabase, callbacks) {
+    renderCupboardList(container, suggestions, fatsDatabase, callbacks, {
         rowOptions: { showExcludeButton: true },
-        totalsLabel: 'Total suggested',
-        totalsPrecision: 1
+        totalsLabel: 'Total suggested'
     });
 }
 

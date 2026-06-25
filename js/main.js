@@ -5,7 +5,7 @@
 
 import * as calc from './core/calculator.js';
 import * as optimizer from './core/optimizer.js';
-import { DEFAULTS, ELEMENT_IDS, getWeightLabel, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES, VOLUME } from './lib/constants.js';
+import { DEFAULTS, ELEMENT_IDS, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES } from './lib/constants.js';
 import * as validation from './lib/validation.js';
 import {
     addExclusion, clearRecipe,
@@ -16,7 +16,7 @@ import {
     clearSuggestionExclusions
 } from './state/state.js';
 import { toast } from './ui/components/toast.js';
-import { $, enableTabArrowNavigation } from './ui/helpers.js';
+import { $, enableTabArrowNavigation, roundWeight } from './ui/helpers.js';
 import { updatePropertiesFromFats } from './ui/properties.js';
 import * as ui from './ui/ui.js';
 import {
@@ -186,14 +186,11 @@ function handleStartOver() {
     const lyeType = $(ELEMENT_IDS.lyeType);
     const superfat = $(ELEMENT_IDS.superfat);
     const waterRatio = $(ELEMENT_IDS.waterRatio);
-    const unit = $(ELEMENT_IDS.unit);
     const recipeWeight = $(ELEMENT_IDS.recipeWeight);
     if (lyeType) lyeType.value = 'NaOH';
     if (superfat) superfat.value = '5';
     if (waterRatio) waterRatio.value = '2';
-    if (unit) unit.value = 'g';
     if (recipeWeight) recipeWeight.value = String(DEFAULTS.BASE_RECIPE_WEIGHT);
-    previousUnit = 'g';
 
     // Reset dietary filters
     const filterAnimal = $(ELEMENT_IDS.filterAnimalBased);
@@ -236,14 +233,11 @@ function handleResetSettings() {
     const lyeType = $(ELEMENT_IDS.lyeType);
     const superfat = $(ELEMENT_IDS.superfat);
     const waterRatio = $(ELEMENT_IDS.waterRatio);
-    const unit = $(ELEMENT_IDS.unit);
     const recipeWeight = $(ELEMENT_IDS.recipeWeight);
     if (lyeType) lyeType.value = 'NaOH';
     if (superfat) superfat.value = '5';
     if (waterRatio) waterRatio.value = '2';
-    if (unit) unit.value = 'g';
     if (recipeWeight) recipeWeight.value = String(DEFAULTS.BASE_RECIPE_WEIGHT);
-    previousUnit = 'g';
 
     resetDietaryFilters();
     calculate();
@@ -262,39 +256,6 @@ function handleResetAdditives() {
 
 function handleResetFilters() {
     resetDietaryFilters();
-}
-
-function handleUnitChange() {
-    const unitSelect = $(ELEMENT_IDS.unit);
-    const recipeWeightInput = $(ELEMENT_IDS.recipeWeight);
-    const newUnit = unitSelect?.value || 'metric';
-
-    // Convert recipe weight if unit changed
-    if (recipeWeightInput && previousUnit !== newUnit) {
-        const currentWeight = parseFloat(recipeWeightInput.value) || 0;
-        let convertedWeight;
-        let conversionFactor = 1;
-
-        if (previousUnit === 'metric' && newUnit === 'imperial') {
-            // Grams to ounces
-            conversionFactor = 1 / VOLUME.G_PER_OZ;
-        } else if (previousUnit === 'imperial' && newUnit === 'metric') {
-            // Ounces to grams
-            conversionFactor = VOLUME.G_PER_OZ;
-        }
-
-        convertedWeight = currentWeight * conversionFactor;
-
-        // Round to reasonable precision
-        recipeWeightInput.value = newUnit === 'imperial'
-            ? convertedWeight.toFixed(1)
-            : Math.round(convertedWeight);
-    }
-
-    previousUnit = newUnit;
-    renderRecipeList();
-    renderAdditivesList();
-    calculate();
 }
 
 function handleAddExclusion() {
@@ -435,7 +396,6 @@ function getCombinedExclusions() {
 // ============================================
 
 let currentBuildMode = 'fats';
-let previousUnit = 'g'; // Track for unit conversion
 
 function updateTabStates(tabSelector, dataAttr, activeValue) {
     document.querySelectorAll(tabSelector).forEach(tab => {
@@ -581,7 +541,6 @@ function setupSettingsListeners() {
     $(ELEMENT_IDS.lyeType).addEventListener('change', calculate);
     $(ELEMENT_IDS.superfat).addEventListener('input', calculate);
     $(ELEMENT_IDS.waterRatio).addEventListener('input', calculate);
-    $(ELEMENT_IDS.unit).addEventListener('change', handleUnitChange);
     $(ELEMENT_IDS.recipeWeight)?.addEventListener('input', handleRecipeWeightSettingChange);
 
     // Dietary filter checkboxes - update all ingredient selects when toggled
@@ -720,10 +679,12 @@ function handleCreateRecipe() {
 
     const settings = ui.getSettings();
 
-    // Convert percentages to actual weights using recipe weight setting
+    // Convert percentages to actual weights (rounded to grams). Lye and water
+    // are calculated from these rounded weights so the published numbers match
+    // what the user will actually weigh out.
     const recipeWithWeights = state.recipe.map(fat => ({
         id: fat.id,
-        weight: Math.round(settings.recipeWeight * fat.percentage / 100)
+        weight: roundWeight(settings.recipeWeight * fat.percentage / 100)
     }));
 
     const lyeAmount = calc.calculateLye(recipeWithWeights, state.fatsDatabase, settings.lyeType, settings.superfat);
@@ -752,8 +713,6 @@ function handleCreateRecipe() {
         processType: settings.processType,
         superfat: settings.superfat,
         waterRatio: settings.waterRatio,
-        unit: getWeightLabel(settings.unit),
-        unitSystem: settings.unit,
         fattyAcids,
         properties: { ...properties, iodine, ins },
         notes,
@@ -782,9 +741,6 @@ async function init() {
 
     // Restore saved state before rendering
     restoreState();
-
-    // Sync previousUnit with restored/default unit value
-    previousUnit = $(ELEMENT_IDS.unit)?.value || 'metric';
 
     updateFatSelectWithFilters();
     ui.initHelpPopup(state.glossaryData, state.tooltipsData, (term) => {

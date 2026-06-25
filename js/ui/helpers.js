@@ -305,6 +305,24 @@ export function enableTabArrowNavigation(tablist, onTabChange) {
 // ============================================
 
 /**
+ * Format a weight in grams at the project's display precision (integer grams).
+ * @param {number} weight - Weight in grams
+ * @returns {string} e.g. "247 g"
+ */
+export function formatWeight(weight) {
+    return `${Math.round(weight)} g`;
+}
+
+/**
+ * Round a weight to the display precision (integer grams), returning a number.
+ * @param {number} weight - Weight in grams
+ * @returns {number}
+ */
+export function roundWeight(weight) {
+    return Math.round(weight);
+}
+
+/**
  * Parse float with fallback
  * @param {string} value - Value to parse
  * @param {number} fallback - Fallback value

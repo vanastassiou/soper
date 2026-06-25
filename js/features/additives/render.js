@@ -6,7 +6,7 @@
  * they share several private helpers (panelListItem, renderReferences).
  */
 
-import { populateSelect } from '../../ui/helpers.js';
+import { formatWeight, populateSelect } from '../../ui/helpers.js';
 import { renderItemRow, renderList } from '../../ui/components/itemRow.js';
 import { checkAdditiveWarnings } from '../../core/calculator.js';
 import { ADDITIVE_WARNING_TYPES, UI_MESSAGES } from '../../lib/constants.js';
@@ -27,19 +27,18 @@ export function populateAdditiveSelect(selectElement, database, existingIds = []
  * @param {HTMLElement} container - Container element
  * @param {Array} recipeAdditives - Array of {id, weight}
  * @param {Object} additivesDatabase - Additives database
- * @param {number} totalFatWeight - Total fat weight for percentage calculations
- * @param {string} unit - Unit string (g or oz)
+ * @param {number} totalFatWeight - Total fat weight for percentage calculations (grams)
  * @param {Object} callbacks - {onWeightChange, onRemove, onInfo}
  * @returns {Array} Warning objects from all additives
  */
-export function renderAdditives(container, recipeAdditives, additivesDatabase, totalFatWeight, unit, callbacks) {
+export function renderAdditives(container, recipeAdditives, additivesDatabase, totalFatWeight, callbacks) {
     const allWarnings = [];
     const totalAdditiveWeight = recipeAdditives.reduce((sum, item) => sum + item.weight, 0);
 
     const headerRow = `
         <div class="item-row header-row cols-3">
             <span>Additive</span>
-            <span>${unit}</span>
+            <span>g</span>
             <span></span>
         </div>
     `;
@@ -47,7 +46,7 @@ export function renderAdditives(container, recipeAdditives, additivesDatabase, t
     const totalsRow = `
         <div class="totals-row">
             <span>Total</span>
-            <span>${totalAdditiveWeight.toFixed(1)} ${unit}</span>
+            <span>${formatWeight(totalAdditiveWeight)}</span>
             <span></span>
         </div>
     `;
@@ -91,7 +90,6 @@ export function renderAdditives(container, recipeAdditives, additivesDatabase, t
                 showWeight: true,
                 showPercentage: false,
                 lockableField: null,
-                unit,
                 itemType: 'additive'
             });
         }

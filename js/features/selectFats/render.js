@@ -3,7 +3,7 @@
  * Moved from js/ui/ui.js as part of the per-feature split.
  */
 
-import { populateSelect } from '../../ui/helpers.js';
+import { formatWeight, populateSelect, roundWeight } from '../../ui/helpers.js';
 import { renderItemRow, renderList } from '../../ui/components/itemRow.js';
 import { UI_MESSAGES } from '../../lib/constants.js';
 
@@ -20,17 +20,16 @@ export function populateFatSelect(selectElement, fatsDatabase, excludeIds = [], 
  * @param {Array} recipe - [{id, percentage}]
  * @param {Object} fatsDatabase
  * @param {Object} callbacks - {onPercentageChange, onRemove, onFatInfo}
- * @param {number} recipeWeight - Total recipe weight from settings
- * @param {string} unit - Unit label (g or oz)
+ * @param {number} recipeWeight - Total recipe weight from settings (grams)
  */
-export function renderRecipe(container, recipe, fatsDatabase, callbacks, recipeWeight, unit) {
+export function renderRecipe(container, recipe, fatsDatabase, callbacks, recipeWeight) {
     const totalPercentage = recipe.reduce((sum, fat) => sum + fat.percentage, 0);
     const totalWeight = recipeWeight * totalPercentage / 100;
     const percentWarning = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
     const totalsRow = `
         <div class="totals-row">
             <span>Total</span>
-            <span>${totalWeight.toFixed(1)} ${unit}</span>
+            <span>${formatWeight(totalWeight)}</span>
             <span class="${percentWarning}">${totalPercentage.toFixed(1)}%</span>
             <span></span>
         </div>
@@ -51,14 +50,13 @@ export function renderRecipe(container, recipe, fatsDatabase, callbacks, recipeW
             return renderItemRow({
                 id: fat.id,
                 name: fatData?.name || fat.id,
-                weight: parseFloat(derivedWeight.toFixed(1)),
+                weight: roundWeight(derivedWeight),
                 percentage: fat.percentage
             }, i, {
                 inputType: 'percentage',
                 showWeight: true,
                 showPercentage: true,
-                itemType: 'fat',
-                unit
+                itemType: 'fat'
             });
         }
     });

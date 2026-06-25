@@ -120,32 +120,6 @@ export function populatePropertyRanges(ranges) {
     });
 }
 
-/**
- * Update percentages without re-rendering inputs
- * @param {Array} recipe - Recipe array
- * @param {string} unit - Unit string
- */
-export function updatePercentages(recipe, unit) {
-    const container = $(ELEMENT_IDS.recipeFats);
-    if (!container) return;
-
-    const totalWeight = recipe.reduce((sum, fat) => sum + fat.weight, 0);
-
-    recipe.forEach((fat, i) => {
-        const row = container.querySelector(`.item-row[data-index="${i}"]`);
-        if (row) {
-            const percentage = totalWeight > 0 ? ((fat.weight / totalWeight) * 100).toFixed(1) : 0;
-            const percentSpan = row.querySelector('.item-percentage');
-            if (percentSpan) percentSpan.textContent = `${percentage}%`;
-        }
-    });
-
-    const totalsRow = container.querySelector('.totals-row');
-    if (totalsRow) {
-        const spans = totalsRow.querySelectorAll('span');
-        if (spans[1]) spans[1].textContent = `${totalWeight.toFixed(2)} ${unit}`;
-    }
-}
 
 // ============================================
 // Info Panels
@@ -732,7 +706,6 @@ export function getSettings() {
         processType: $(ELEMENT_IDS.processType)?.value || 'cold',
         superfat: parseFloatOr($(ELEMENT_IDS.superfat)?.value, 0),
         waterRatio: parseFloatOr($(ELEMENT_IDS.waterRatio)?.value, 2),
-        unit: $(ELEMENT_IDS.unit)?.value || 'metric',
         recipeWeight: parseFloatOr($(ELEMENT_IDS.recipeWeight)?.value, DEFAULTS.BASE_RECIPE_WEIGHT)
     };
 }

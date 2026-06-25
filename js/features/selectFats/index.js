@@ -3,8 +3,8 @@
  * User adds fats by percentage; total percentage should sum to 100%.
  */
 
-import { $, setVisibility } from '../../ui/helpers.js';
-import { ELEMENT_IDS, UI_MESSAGES, getWeightLabel } from '../../lib/constants.js';
+import { $, formatWeight, setVisibility } from '../../ui/helpers.js';
+import { ELEMENT_IDS, UI_MESSAGES } from '../../lib/constants.js';
 import { toast } from '../../ui/components/toast.js';
 import {
     addFatToRecipe,
@@ -48,7 +48,7 @@ export function renderRecipeList() {
         onPercentageChange: handlePercentageChange,
         onRemove: handleRemoveFat,
         onFatInfo: deps.createFatInfoHandler(() => state.recipe)
-    }, settings.recipeWeight, getWeightLabel(settings.unit));
+    }, settings.recipeWeight);
 
     setVisibility(useFatsAction, state.recipe.length > 0);
 }
@@ -90,7 +90,6 @@ function updateRecipeDerivedDisplays(settings) {
     if (!container) return;
 
     const recipeWeight = settings.recipeWeight;
-    const unit = getWeightLabel(settings.unit);
 
     state.recipe.forEach((fat, i) => {
         const row = container.querySelector(`.item-row[data-index="${i}"]`);
@@ -98,8 +97,7 @@ function updateRecipeDerivedDisplays(settings) {
 
         const weightSpan = row.querySelector('.weight-cell .fat-weight');
         if (weightSpan) {
-            const derivedWeight = (recipeWeight * fat.percentage / 100).toFixed(1);
-            weightSpan.textContent = `${derivedWeight} ${unit}`;
+            weightSpan.textContent = formatWeight(recipeWeight * fat.percentage / 100);
         }
     });
 
@@ -108,7 +106,7 @@ function updateRecipeDerivedDisplays(settings) {
         const totalPercentage = state.recipe.reduce((sum, f) => sum + f.percentage, 0);
         const totalWeight = recipeWeight * totalPercentage / 100;
         const spans = totalsRow.querySelectorAll('span');
-        if (spans[1]) spans[1].textContent = `${totalWeight.toFixed(1)} ${unit}`;
+        if (spans[1]) spans[1].textContent = formatWeight(totalWeight);
         if (spans[2]) {
             spans[2].textContent = `${totalPercentage.toFixed(1)}%`;
             spans[2].className = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';

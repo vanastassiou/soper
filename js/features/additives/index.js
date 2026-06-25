@@ -3,7 +3,7 @@
  */
 
 import { $, enableTabArrowNavigation } from '../../ui/helpers.js';
-import { ADDITIVE_CATEGORIES, ADDITIVE_WARNING_TYPES, ELEMENT_IDS, UI_MESSAGES, getWeightLabel } from '../../lib/constants.js';
+import { ADDITIVE_CATEGORIES, ADDITIVE_WARNING_TYPES, ELEMENT_IDS, UI_MESSAGES } from '../../lib/constants.js';
 import { toast } from '../../ui/components/toast.js';
 import {
     addAdditiveToRecipe,
@@ -126,7 +126,6 @@ export function renderAdditivesList() {
         state.recipeAdditives,
         allAdditives,
         totalFatWeight,
-        getWeightLabel(settings.unit),
         {
             onWeightChange: handleAdditiveWeightChange,
             onRemove: handleRemoveAdditive,

@@ -13,7 +13,6 @@ export const ELEMENT_IDS = {
     processType: 'processType',
     superfat: 'superfat',
     waterRatio: 'waterRatio',
-    unit: 'unit',
     recipeWeight: 'recipeWeight',
 
     // Fat selection
@@ -222,8 +221,6 @@ export const PROPERTY_RANGES = {
 
 // Volume calculation constants
 export const VOLUME = {
-    G_PER_OZ: 28.3495,
-    ML_PER_FLOZ: 29.5735,
     NAOH_DENSITY: 2.13,        // g/mL for solid NaOH
     WATER_DENSITY: 1.0,        // g/mL
     DEFAULT_FAT_DENSITY: 0.91, // fallback g/mL
@@ -231,39 +228,6 @@ export const VOLUME = {
     UNCERTAINTY_MIN: 0.88,     // -12% volume uncertainty
     UNCERTAINTY_MAX: 1.12      // +12% volume uncertainty
 };
-
-// Unit system labels
-export const UNIT_LABELS = {
-    metric: { weight: 'g', volume: 'mL' },
-    imperial: { weight: 'oz', volume: 'fl oz' }
-};
-
-/**
- * Get display labels for a unit system
- * @param {string} unitSystem - 'metric' or 'imperial'
- * @returns {{weight: string, volume: string}} Display labels
- */
-export function getUnitLabels(unitSystem) {
-    return UNIT_LABELS[unitSystem] || UNIT_LABELS.metric;
-}
-
-/**
- * Get weight label for a unit system
- * @param {string} unitSystem - 'metric' or 'imperial'
- * @returns {string} Weight label ('g' or 'oz')
- */
-export function getWeightLabel(unitSystem) {
-    return getUnitLabels(unitSystem).weight;
-}
-
-/**
- * Get volume label for a unit system
- * @param {string} unitSystem - 'metric' or 'imperial'
- * @returns {string} Volume label ('mL' or 'fl oz')
- */
-export function getVolumeLabel(unitSystem) {
-    return getUnitLabels(unitSystem).volume;
-}
 
 // Profile builder thresholds
 export const PROFILE = {

@@ -5,7 +5,7 @@
 
 import { CSS_CLASSES, ELEMENT_IDS, FATTY_ACID_KEYS, FATTY_ACID_NAMES, PROPERTY_RANGES } from '../lib/constants.js';
 import { resolveReference } from '../lib/references.js';
-import { $ } from './helpers.js';
+import { $, formatWeight } from './helpers.js';
 
 // ============================================
 // Qualitative Summary
@@ -90,51 +90,13 @@ function buildQualitativeSummary(properties, notes = []) {
 }
 
 // ============================================
-// Formatting Helpers
-// ============================================
-
-/**
- * Format a weight value with unit
- * @param {number} weight - Weight value
- * @param {string} unit - Unit string
- * @returns {string} Formatted weight string
- */
-function formatWeight(weight, unit) {
-    return `${weight.toFixed(2)} ${unit}`;
-}
-
-
-// ============================================
 // Recipe Procedure Templates
 // ============================================
-
-/**
- * Convert Celsius to Fahrenheit
- * @param {number} celsius - Temperature in Celsius
- * @returns {number} Temperature in Fahrenheit
- */
-function celsiusToFahrenheit(celsius) {
-    return Math.round(celsius * 9 / 5 + 32);
-}
-
-/**
- * Format temperature for display based on unit system
- * @param {number} lowC - Low temperature in Celsius
- * @param {number} highC - High temperature in Celsius
- * @param {string} unitSystem - 'metric' or 'imperial'
- * @returns {string} Formatted temperature string
- */
-function formatTemperatureRange(lowC, highC, unitSystem) {
-    if (unitSystem === 'imperial') {
-        return `${celsiusToFahrenheit(lowC)}-${celsiusToFahrenheit(highC)}°F`;
-    }
-    return `${lowC}-${highC}°C`;
-}
 
 const COLD_PROCESS_PROCEDURE = [
     {
         title: 'Prepare fats',
-        textTemplate: (unit) => `Combine fats in a heat-safe, non-reactive container (avoid aluminum). Heat gently until all solid fats are melted, then let cool to target soaping temperature (typically ${formatTemperatureRange(38, 54, unit)}).`
+        text: 'Combine fats in a heat-safe, non-reactive container (avoid aluminum). Heat gently until all solid fats are melted, then let cool to target soaping temperature (typically 38-54°C).'
     },
     {
         title: 'Prepare lye solution',
@@ -158,19 +120,6 @@ const COLD_PROCESS_PROCEDURE = [
         text: 'Let mixture saponify for 24 to 48 hours, then unmould and cut into bars if needed. Cure soap on a rack in a cool, dry place for 4 to 6 weeks before use.'
     }
 ];
-
-/**
- * Get procedure step text, supporting both static text and templates
- * @param {Object} step - Procedure step
- * @param {string} unitSystem - 'metric' or 'imperial'
- * @returns {string} Step text
- */
-function getStepText(step, unitSystem) {
-    if (step.textTemplate) {
-        return step.textTemplate(unitSystem);
-    }
-    return step.text;
-}
 
 const HOT_PROCESS_PROCEDURE = [
     {
@@ -214,7 +163,7 @@ const HOT_PROCESS_PROCEDURE = [
  * @returns {string} HTML for ingredients section
  */
 function buildIngredientsList(data) {
-    const { recipe, recipeAdditives, fatsDatabase, additivesDatabase, lyeAmount, waterAmount, lyeType, unit } = data;
+    const { recipe, recipeAdditives, fatsDatabase, additivesDatabase, lyeAmount, waterAmount, lyeType } = data;
 
     let html = '<div class="recipe-section"><h4>Ingredients</h4><ul class="ingredients-list">';
 
@@ -222,21 +171,21 @@ function buildIngredientsList(data) {
     recipe.forEach(fat => {
         const fatData = fatsDatabase[fat.id];
         const name = fatData ? fatData.name : fat.id;
-        html += `<li><span class="ingredient-amount">${formatWeight(fat.weight, unit)}</span> <span class="ingredient-name">${name}</span></li>`;
+        html += `<li><span class="ingredient-amount">${formatWeight(fat.weight)}</span> <span class="ingredient-name">${name}</span></li>`;
     });
 
     // Lye
     const lyeFullName = lyeType === 'NaOH' ? 'Sodium Hydroxide (NaOH)' : 'Potassium Hydroxide (KOH)';
-    html += `<li><span class="ingredient-amount">${formatWeight(lyeAmount, unit)}</span> <span class="ingredient-name">${lyeFullName}</span></li>`;
+    html += `<li><span class="ingredient-amount">${formatWeight(lyeAmount)}</span> <span class="ingredient-name">${lyeFullName}</span></li>`;
 
     // Water
-    html += `<li><span class="ingredient-amount">${formatWeight(waterAmount, unit)}</span> <span class="ingredient-name">Distilled Water</span></li>`;
+    html += `<li><span class="ingredient-amount">${formatWeight(waterAmount)}</span> <span class="ingredient-name">Distilled Water</span></li>`;
 
     // Additives
     recipeAdditives.forEach(item => {
         const additive = additivesDatabase[item.id];
         const name = additive ? additive.name : item.id;
-        html += `<li><span class="ingredient-amount">${formatWeight(item.weight, unit)}</span> <span class="ingredient-name">${name}</span></li>`;
+        html += `<li><span class="ingredient-amount">${formatWeight(item.weight)}</span> <span class="ingredient-name">${name}</span></li>`;
     });
 
     html += '</ul></div>';
@@ -249,7 +198,7 @@ function buildIngredientsList(data) {
  * @param {string} processType - 'cold' or 'hot'
  * @returns {string} HTML for procedure section
  */
-function buildProcedureList(hasAdditives, processType = 'cold', unitSystem = 'metric') {
+function buildProcedureList(hasAdditives, processType = 'cold') {
     const procedure = processType === 'hot' ? HOT_PROCESS_PROCEDURE : COLD_PROCESS_PROCEDURE;
     const processLabel = processType === 'hot' ? 'Hot process' : 'Cold process';
 
@@ -259,7 +208,7 @@ function buildProcedureList(hasAdditives, processType = 'cold', unitSystem = 'me
         // Skip conditional steps if condition not met
         if (step.conditional === 'additives' && !hasAdditives) return;
 
-        html += `<li><strong>${step.title}.</strong> ${getStepText(step, unitSystem)}</li>`;
+        html += `<li><strong>${step.title}.</strong> ${step.text}</li>`;
     });
 
     html += '</ol></div>';
@@ -272,7 +221,7 @@ function buildProcedureList(hasAdditives, processType = 'cold', unitSystem = 'me
  * @returns {string} HTML for summary section
  */
 function buildRecipeSummary(data) {
-    const { recipe, recipeAdditives, lyeAmount, waterAmount, lyeType, superfat, waterRatio, unit } = data;
+    const { recipe, recipeAdditives, lyeAmount, waterAmount, lyeType, superfat, waterRatio } = data;
     const totalFatWeight = recipe.reduce((sum, fat) => sum + fat.weight, 0);
     const additivesWeight = recipeAdditives.reduce((sum, item) => sum + item.weight, 0);
     const totalBatch = totalFatWeight + lyeAmount + waterAmount + additivesWeight;
@@ -281,16 +230,16 @@ function buildRecipeSummary(data) {
         <div class="recipe-summary">
             <h4>Recipe summary</h4>
             <ul>
-                <li>Total fats: ${formatWeight(totalFatWeight, unit)}</li>
-                <li>${lyeType}: ${formatWeight(lyeAmount, unit)}</li>
-                <li>Water: ${formatWeight(waterAmount, unit)} (${waterRatio}:1 water to lye)</li>`;
+                <li>Total fats: ${formatWeight(totalFatWeight)}</li>
+                <li>${lyeType}: ${formatWeight(lyeAmount)}</li>
+                <li>Water: ${formatWeight(waterAmount)} (${waterRatio}:1 water to lye)</li>`;
 
     if (recipeAdditives.length > 0) {
-        html += `<li>Additives: ${formatWeight(additivesWeight, unit)}</li>`;
+        html += `<li>Additives: ${formatWeight(additivesWeight)}</li>`;
     }
 
     html += `
-                <li>Total batch weight: ${formatWeight(totalBatch, unit)}</li>
+                <li>Total batch weight: ${formatWeight(totalBatch)}</li>
                 <li>Superfat: ${superfat}%</li>
             </ul>
         </div>`;
@@ -469,7 +418,7 @@ function buildLyeExplanation(data, formulas, sources) {
             <h5>Lye calculation</h5>
             <p>${formula.userFriendly}</p>
             <p class="science-value-context">
-                Your recipe requires <strong>${data.lyeAmount.toFixed(2)} ${data.unit}</strong> of ${lyeFullName} with a <strong>${data.superfat}% superfat</strong>.
+                Your recipe requires <strong>${formatWeight(data.lyeAmount)}</strong> of ${lyeFullName} with a <strong>${data.superfat}% superfat</strong>.
             </p>
             ${citationHtml}
             ${learnMoreHtml}
@@ -594,20 +543,18 @@ function buildScienceSection(data) {
  * @param {string} data.processType - Process type (cold or hot)
  * @param {number} data.superfat - Superfat percentage
  * @param {number} data.waterRatio - Water to lye ratio
- * @param {string} data.unit - Unit string
  * @param {Object} data.fattyAcids - Fatty acid percentages
  * @param {Object} data.properties - Soap properties {hardness, degreasing, moisturizing, lather-volume, lather-density, iodine, ins}
  * @param {Array} data.notes - Recipe notes array
  */
 export function renderFinalRecipe(container, data) {
     const hasAdditives = data.recipeAdditives.length > 0;
-    const unitSystem = data.unitSystem || 'metric';
 
     container.innerHTML = `
         <div class="recipe-prose">
             ${buildQualitativeSummary(data.properties, data.notes)}
             ${buildIngredientsList(data)}
-            ${buildProcedureList(hasAdditives, data.processType, unitSystem)}
+            ${buildProcedureList(hasAdditives, data.processType)}
             ${buildScienceSection(data)}
         </div>
     `;
