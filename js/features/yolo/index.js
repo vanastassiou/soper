@@ -5,7 +5,7 @@
 import { $, setVisibility } from '../../ui/helpers.js';
 import { DEFAULTS, ELEMENT_IDS, UI_MESSAGES } from '../../lib/constants.js';
 import { toast } from '../../ui/components/toast.js';
-import { attachRowEventHandlers } from '../../ui/components/itemRow.js';
+import { renderList } from '../../ui/components/itemRow.js';
 import * as optimizer from '../../core/optimizer.js';
 import {
     addSuggestionExclusion,
@@ -17,7 +17,7 @@ import {
     toggleYoloLock
 } from '../../state/state.js';
 import { updatePropertiesFromFats } from '../../ui/properties.js';
-import { renderYoloRows } from './render.js';
+import { yoloRowFor } from './render.js';
 
 let deps;
 
@@ -82,32 +82,28 @@ export function renderYoloRecipe() {
 
     setVisibility(useAction, true);
 
-    container.innerHTML = renderYoloRows(state.yoloRecipe, state.fatsDatabase, state.yoloLockedIndices);
-
-    container._callbacks = {
-        onToggleLock: (index) => {
-            toggleYoloLock(index);
-            renderYoloRecipe();
-        },
-        onRemove: (index) => {
-            removeYoloFat(index);
-            renderYoloRecipe();
-        },
-        onExclude: (fatId) => {
-            addSuggestionExclusion(fatId);
-            const index = state.yoloRecipe.findIndex(f => f.id === fatId);
-            if (index !== -1) {
+    renderList(container, state.yoloRecipe, {
+        rowFor: yoloRowFor(state.fatsDatabase, state.yoloLockedIndices),
+        callbacks: {
+            onToggleLock: (index) => {
+                toggleYoloLock(index);
+                renderYoloRecipe();
+            },
+            onRemove: (index) => {
                 removeYoloFat(index);
-            }
-            renderYoloRecipe();
-        },
-        onInfo: deps.createFatInfoHandler(() => state.yoloRecipe)
-    };
-
-    if (!container.dataset.handlersAttached) {
-        attachRowEventHandlers(container, container._callbacks, 'fat');
-        container.dataset.handlersAttached = 'true';
-    }
+                renderYoloRecipe();
+            },
+            onExclude: (fatId) => {
+                addSuggestionExclusion(fatId);
+                const index = state.yoloRecipe.findIndex(f => f.id === fatId);
+                if (index !== -1) {
+                    removeYoloFat(index);
+                }
+                renderYoloRecipe();
+            },
+            onInfo: deps.createFatInfoHandler(() => state.yoloRecipe)
+        }
+    });
 }
 
 function handleUseYoloRecipe() {

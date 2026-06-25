@@ -3,8 +3,8 @@
  * Moved from js/ui/ui.js as part of the per-feature split.
  */
 
-import { $, parseFloatOr, parseIntOr, setupAbortSignal } from '../../ui/helpers.js';
-import { attachRowEventHandlers, renderItemRow } from '../../ui/components/itemRow.js';
+import { $, parseFloatOr, parseIntOr } from '../../ui/helpers.js';
+import { renderItemRow, renderList } from '../../ui/components/itemRow.js';
 import {
     CSS_CLASSES,
     ELEMENT_IDS,
@@ -28,35 +28,33 @@ export function renderProfileResults(result, targetProfile, fatsDatabase, locked
     const matchBarFill = $(ELEMENT_IDS.matchBarFill);
     const matchPercent = $(ELEMENT_IDS.matchPercent);
     const useRecipeBtn = $(ELEMENT_IDS.useRecipeBtn);
-    const signal = setupAbortSignal(suggestedRecipeDiv);
 
     resultsContainer.classList.remove(CSS_CLASSES.hidden);
 
     matchBarFill.style.width = `${result.matchQuality}%`;
     matchPercent.textContent = `${result.matchQuality}%`;
 
-    const rows = result.recipe.map((fat, index) => {
-        const fatData = fatsDatabase[fat.id];
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            percentage: fat.percentage,
-            isLocked: lockedIndices.has(index)
-        }, index, {
-            showWeight: false,
-            showPercentage: true,
-            lockableField: 'percentage',
-            showRemoveButton: false,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    suggestedRecipeDiv.innerHTML = rows;
-
-    attachRowEventHandlers(suggestedRecipeDiv, {
-        onInfo: callbacks.onFatInfo,
-        onToggleLock: callbacks.onToggleLock
-    }, 'fat', signal);
+    renderList(suggestedRecipeDiv, result.recipe, {
+        callbacks: {
+            onInfo: callbacks.onFatInfo,
+            onToggleLock: callbacks.onToggleLock
+        },
+        rowFor: (fat, index) => {
+            const fatData = fatsDatabase[fat.id];
+            return renderItemRow({
+                id: fat.id,
+                name: fatData?.name || fat.id,
+                percentage: fat.percentage,
+                isLocked: lockedIndices.has(index)
+            }, index, {
+                showWeight: false,
+                showPercentage: true,
+                lockableField: 'percentage',
+                showRemoveButton: false,
+                itemType: 'fat'
+            });
+        }
+    });
 
     const comparisonItems = [];
     for (const [acid, name] of Object.entries(FATTY_ACID_NAMES)) {

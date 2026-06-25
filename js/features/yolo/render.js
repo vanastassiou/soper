@@ -1,19 +1,18 @@
 /**
  * YOLO mode renderer.
- * Pure HTML generation for the random-recipe row list.
+ * Builds the rowFor function used by renderList for the random-recipe list.
  */
 
 import { renderItemRow } from '../../ui/components/itemRow.js';
 
 /**
- * Build the YOLO recipe row HTML.
- * @param {Array} recipe - [{id, percentage}]
+ * Curried row builder for renderList.
  * @param {Object} fatsDatabase
  * @param {Set} lockedIndices
- * @returns {string} HTML for the row list
+ * @returns {(item: {id: string, percentage: number}, index: number) => string}
  */
-export function renderYoloRows(recipe, fatsDatabase, lockedIndices) {
-    return recipe.map((item, index) => {
+export function yoloRowFor(fatsDatabase, lockedIndices) {
+    return (item, index) => {
         const fat = fatsDatabase[item.id];
         return renderItemRow({
             id: item.id,
@@ -27,5 +26,5 @@ export function renderYoloRows(recipe, fatsDatabase, lockedIndices) {
             showExcludeButton: true,
             itemType: 'fat'
         });
-    }).join('');
+    };
 }

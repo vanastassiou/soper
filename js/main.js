@@ -302,22 +302,6 @@ function handleUnitChange() {
         recipeWeightInput.value = newUnit === 'imperial'
             ? convertedWeight.toFixed(1)
             : Math.round(convertedWeight);
-
-        // Convert locked weights in recipe items
-        if (conversionFactor !== 1 && state.recipeLocks.size > 0) {
-            const newRecipe = [...state.recipe];
-            let changed = false;
-            for (const lockedIndex of state.recipeLocks) {
-                const fat = newRecipe[lockedIndex];
-                if (fat?.lockedWeight != null) {
-                    newRecipe[lockedIndex] = { ...fat, lockedWeight: fat.lockedWeight * conversionFactor };
-                    changed = true;
-                }
-            }
-            if (changed) {
-                state.recipe = newRecipe;
-            }
-        }
     }
 
     previousUnit = newUnit;
@@ -855,7 +839,6 @@ async function init() {
 
     const transferRecipeToSelectFats = (recipe) => {
         state.recipe = recipe;
-        state.recipeLocks = new Set();
         switchBuildMode('fats', true);
         renderRecipeList();
         updateFatSelectWithFilters();

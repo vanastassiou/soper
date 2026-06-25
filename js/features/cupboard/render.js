@@ -3,14 +3,59 @@
  * Moved from js/ui/ui.js as part of the per-feature split.
  */
 
-import { populateSelect, setupAbortSignal } from '../../ui/helpers.js';
+import { populateSelect } from '../../ui/helpers.js';
 import {
-    attachRowEventHandlers,
-    renderEmptyState,
     renderItemRow,
+    renderList,
     renderTotalsRow
 } from '../../ui/components/itemRow.js';
 import { UI_MESSAGES } from '../../lib/constants.js';
+
+/**
+ * Shared cupboard list renderer. The two public entry points below differ
+ * only in which trailing button each row shows, which totals label is used,
+ * and which callbacks are passed through.
+ */
+function renderCupboardList(container, items, fatsDatabase, unit, callbacks, options) {
+    const {
+        emptyMessage,
+        rowOptions,
+        totalsLabel,
+        totalsPrecision
+    } = options;
+
+    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+
+    renderList(container, items, {
+        emptyMessage,
+        callbacks,
+        totals: items.length > 0
+            ? renderTotalsRow(totalsLabel, totalWeight, unit, totalsPrecision)
+            : '',
+        rowFor: (item, i) => {
+            const fatData = fatsDatabase[item.id];
+            const percentage = item.percentage != null
+                ? item.percentage
+                : (totalWeight > 0 ? ((item.weight / totalWeight) * 100).toFixed(1) : 0);
+
+            return renderItemRow({
+                id: item.id,
+                name: fatData?.name || item.id,
+                weight: item.weight,
+                percentage,
+                isLocked: false
+            }, i, {
+                inputType: 'weight',
+                showWeight: true,
+                showPercentage: true,
+                lockableField: null,
+                unit,
+                itemType: 'fat',
+                ...rowOptions
+            });
+        }
+    });
+}
 
 /**
  * Render cupboard fats (weight input, no locks)
@@ -21,40 +66,12 @@ import { UI_MESSAGES } from '../../lib/constants.js';
  * @param {Object} callbacks - {onWeightChange, onRemove, onInfo}
  */
 export function renderCupboardFats(container, cupboardFats, fatsDatabase, unit, callbacks) {
-    const signal = setupAbortSignal(container);
-
-    if (cupboardFats.length === 0) {
-        container.innerHTML = renderEmptyState(UI_MESSAGES.NO_CUPBOARD_FATS);
-        return;
-    }
-
-    const totalWeight = cupboardFats.reduce((sum, fat) => sum + fat.weight, 0);
-
-    const rows = cupboardFats.map((fat, i) => {
-        const fatData = fatsDatabase[fat.id];
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            weight: fat.weight,
-            percentage: totalWeight > 0 ? ((fat.weight / totalWeight) * 100).toFixed(1) : 0
-        }, i, {
-            inputType: 'weight',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: null,
-            showRemoveButton: true,
-            unit,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    container.innerHTML = rows + renderTotalsRow('Total Fats', totalWeight, unit, 0);
-
-    attachRowEventHandlers(container, {
-        onWeightChange: callbacks.onWeightChange,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onInfo
-    }, 'fat', signal);
+    renderCupboardList(container, cupboardFats, fatsDatabase, unit, callbacks, {
+        emptyMessage: UI_MESSAGES.NO_CUPBOARD_FATS,
+        rowOptions: { showRemoveButton: true },
+        totalsLabel: 'Total Fats',
+        totalsPrecision: 0
+    });
 }
 
 /**
@@ -66,42 +83,11 @@ export function renderCupboardFats(container, cupboardFats, fatsDatabase, unit, 
  * @param {Object} callbacks - {onWeightChange, onRemove, onExclude, onInfo}
  */
 export function renderCupboardSuggestions(container, suggestions, fatsDatabase, unit, callbacks) {
-    const signal = setupAbortSignal(container);
-
-    if (suggestions.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-
-    const totalWeight = suggestions.reduce((sum, s) => sum + s.weight, 0);
-
-    const rows = suggestions.map((sugg, i) => {
-        const fatData = fatsDatabase[sugg.id];
-        return renderItemRow({
-            id: sugg.id,
-            name: fatData?.name || sugg.id,
-            weight: sugg.weight,
-            percentage: sugg.percentage,
-            isLocked: false
-        }, i, {
-            inputType: 'weight',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: null,
-            showExcludeButton: true,
-            unit,
-            itemType: 'fat'
-        });
-    }).join('');
-
-    container.innerHTML = rows + renderTotalsRow('Total suggested', totalWeight, unit, 1);
-
-    attachRowEventHandlers(container, {
-        onWeightChange: callbacks.onWeightChange,
-        onRemove: callbacks.onRemove,
-        onExclude: callbacks.onExclude,
-        onInfo: callbacks.onInfo
-    }, 'fat', signal);
+    renderCupboardList(container, suggestions, fatsDatabase, unit, callbacks, {
+        rowOptions: { showExcludeButton: true },
+        totalsLabel: 'Total suggested',
+        totalsPrecision: 1
+    });
 }
 
 /**

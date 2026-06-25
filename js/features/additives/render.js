@@ -7,11 +7,7 @@
  */
 
 import { populateSelect } from '../../ui/helpers.js';
-import {
-    attachRowEventHandlers,
-    renderEmptyState,
-    renderItemRow
-} from '../../ui/components/itemRow.js';
+import { renderItemRow, renderList } from '../../ui/components/itemRow.js';
 import { checkAdditiveWarnings } from '../../core/calculator.js';
 import { ADDITIVE_WARNING_TYPES, UI_MESSAGES } from '../../lib/constants.js';
 
@@ -38,16 +34,6 @@ export function populateAdditiveSelect(selectElement, database, existingIds = []
  */
 export function renderAdditives(container, recipeAdditives, additivesDatabase, totalFatWeight, unit, callbacks) {
     const allWarnings = [];
-
-    if (recipeAdditives.length === 0) {
-        container.innerHTML = renderEmptyState(
-            UI_MESSAGES.NO_ADDITIVES_ADDED,
-            '',
-            'additive-empty'
-        );
-        return allWarnings;
-    }
-
     const totalAdditiveWeight = recipeAdditives.reduce((sum, item) => sum + item.weight, 0);
 
     const headerRow = `
@@ -58,39 +44,6 @@ export function renderAdditives(container, recipeAdditives, additivesDatabase, t
         </div>
     `;
 
-    const rows = recipeAdditives.map((item, i) => {
-        const additive = additivesDatabase[item.id];
-        if (!additive) return '';
-
-        const percentage = totalFatWeight > 0 ? (item.weight / totalFatWeight) * 100 : 0;
-        const warnings = checkAdditiveWarnings(additive, percentage);
-        allWarnings.push(...warnings.map(w => ({ ...w, additiveName: additive.name })));
-
-        let warningClass = '';
-        if (warnings.some(w => w.type === ADDITIVE_WARNING_TYPES.DANGER)) {
-            warningClass = 'danger';
-        } else if (warnings.some(w => w.type === ADDITIVE_WARNING_TYPES.WARNING)) {
-            warningClass = 'warning';
-        }
-
-        return renderItemRow({
-            id: item.id,
-            name: additive.name,
-            weight: item.weight,
-            percentage: percentage.toFixed(1),
-            isLocked: false,
-            hasWarning: !!warningClass,
-            warningClass
-        }, i, {
-            inputType: 'weight',
-            showWeight: true,
-            showPercentage: false,
-            lockableField: null,
-            unit,
-            itemType: 'additive'
-        });
-    }).join('');
-
     const totalsRow = `
         <div class="totals-row">
             <span>Total</span>
@@ -99,18 +52,50 @@ export function renderAdditives(container, recipeAdditives, additivesDatabase, t
         </div>
     `;
 
-    container.innerHTML = headerRow + rows + totalsRow;
+    renderList(container, recipeAdditives, {
+        emptyMessage: UI_MESSAGES.NO_ADDITIVES_ADDED,
+        emptyClassName: 'additive-empty',
+        header: headerRow,
+        totals: totalsRow,
+        itemType: 'additive',
+        callbacks: {
+            onWeightChange: callbacks.onWeightChange,
+            onRemove: callbacks.onRemove,
+            onInfo: callbacks.onInfo
+        },
+        rowFor: (item, i) => {
+            const additive = additivesDatabase[item.id];
+            if (!additive) return '';
 
-    container._callbacks = {
-        onWeightChange: callbacks.onWeightChange,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onInfo
-    };
+            const percentage = totalFatWeight > 0 ? (item.weight / totalFatWeight) * 100 : 0;
+            const warnings = checkAdditiveWarnings(additive, percentage);
+            allWarnings.push(...warnings.map(w => ({ ...w, additiveName: additive.name })));
 
-    if (!container.dataset.handlersAttached) {
-        attachRowEventHandlers(container, container._callbacks, 'additive');
-        container.dataset.handlersAttached = 'true';
-    }
+            let warningClass = '';
+            if (warnings.some(w => w.type === ADDITIVE_WARNING_TYPES.DANGER)) {
+                warningClass = 'danger';
+            } else if (warnings.some(w => w.type === ADDITIVE_WARNING_TYPES.WARNING)) {
+                warningClass = 'warning';
+            }
+
+            return renderItemRow({
+                id: item.id,
+                name: additive.name,
+                weight: item.weight,
+                percentage: percentage.toFixed(1),
+                isLocked: false,
+                hasWarning: !!warningClass,
+                warningClass
+            }, i, {
+                inputType: 'weight',
+                showWeight: true,
+                showPercentage: false,
+                lockableField: null,
+                unit,
+                itemType: 'additive'
+            });
+        }
+    });
 
     return allWarnings;
 }

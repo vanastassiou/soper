@@ -149,14 +149,17 @@ export function onActivate(callback) {
 // ============================================
 
 /**
- * Conditionally show/hide a section with content
- * @param {HTMLElement} element - Section element
- * @param {string|null} content - HTML content (null/empty hides section)
+ * Conditionally show/hide a section with content.
+ *
+ * @param {HTMLElement} element - Section element whose display is toggled.
+ * @param {string|null} content - HTML content (null/empty hides section).
+ * @param {HTMLElement} [contentTarget] - Element to receive `innerHTML`.
+ *   Defaults to `element` (legacy single-element behaviour).
  */
-export function showSection(element, content) {
+export function showSection(element, content, contentTarget = element) {
     if (!element) return;
     if (content) {
-        element.innerHTML = content;
+        if (contentTarget) contentTarget.innerHTML = content;
         element.style.display = 'block';
     } else {
         element.style.display = 'none';

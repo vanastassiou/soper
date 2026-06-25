@@ -22,7 +22,8 @@ import {
     onActivate,
     parseFloatOr,
     populateSelect,
-    positionNearAnchor
+    positionNearAnchor,
+    showSection
 } from './helpers.js';
 
 import {
@@ -153,6 +154,17 @@ export function updatePercentages(recipe, unit) {
 /**
  * Render a single panel-list row: label on the left, value on the right.
  */
+/**
+ * Set textContent on a group of panel header fields keyed by element ID.
+ * Used by fat, glossary, additive, and fatty-acid info panels to populate
+ * the name / type / description slots without repeating $().textContent.
+ */
+function setPanelHeader(fields) {
+    for (const [id, value] of Object.entries(fields)) {
+        $(id).textContent = value;
+    }
+}
+
 function panelListItem(label, value) {
     return `
         <div class="panel-list-item">
@@ -175,6 +187,18 @@ function renderSoapProperties(props) {
     ].map(([label, value]) => `
         <div class="panel-prop-item"><span class="panel-prop-label">${label}</span><span class="panel-prop-value">${value}</span></div>
     `).join('');
+}
+
+/**
+ * Render references into a panel by ID, then open it.
+ * Used by the four show*Info functions to share the closing dance.
+ * @param {string} panelId - Element ID of the panel
+ * @param {Array} references - Array of {sourceId, section, url}
+ * @param {Object} sourcesData - Sources database for resolving sourceIds
+ */
+function openInfoPanel(panelId, references, sourcesData) {
+    renderReferences($(panelId), references, sourcesData);
+    openPanel(panelId, ELEMENT_IDS.panelOverlay);
 }
 
 /**
@@ -220,12 +244,11 @@ export function showFatInfo(fatId, fatsDatabase, fattyAcidsData, sourcesData, on
 
     const fat = fatsDatabase[fatId];
 
-    // Name and type
-    $('fatPanelName').textContent = fat.name;
-    $('fatPanelType').textContent = fat.type || 'fat';
-
-    // Description
-    $('fatPanelDescription').textContent = fat.description;
+    setPanelHeader({
+        fatPanelName: fat.name,
+        fatPanelType: fat.type || 'fat',
+        fatPanelDescription: fat.description
+    });
 
     // Details: SAP and usage as list items with labels
     const sap = fat.details?.sap || fat.sap;
@@ -263,9 +286,7 @@ export function showFatInfo(fatId, fatsDatabase, fattyAcidsData, sourcesData, on
         }));
     }
 
-    renderReferences($(ELEMENT_IDS.fatInfoPanel), fat.references, sourcesData);
-
-    openPanel(ELEMENT_IDS.fatInfoPanel, ELEMENT_IDS.panelOverlay);
+    openInfoPanel(ELEMENT_IDS.fatInfoPanel, fat.references, sourcesData);
 }
 
 /**
@@ -310,54 +331,47 @@ export function showGlossaryInfo(term, glossaryData, recipe, fatsDatabase, sourc
 
     const data = glossaryData[term];
 
-    // Name and type
-    $('glossaryPanelName').textContent = data.name || data.term;
-    $('glossaryPanelType').textContent = data.type || data.category;
-
-    // Description
-    $('glossaryPanelDesc').textContent = data.description || data.desc;
+    setPanelHeader({
+        glossaryPanelName: data.name || data.term,
+        glossaryPanelType: data.type || data.category,
+        glossaryPanelDesc: data.description || data.desc
+    });
 
     // Details section
-    const detailsSection = $('glossaryDetailsSection');
-    const detailsEl = $('glossaryPanelDetails');
     const details = data.details?.prose || data.details;
-    if (details) {
-        detailsEl.innerHTML = details.replace(/\n/g, '<br>');
-        detailsSection.style.display = 'block';
-    } else {
-        detailsSection.style.display = 'none';
-    }
+    showSection(
+        $('glossaryDetailsSection'),
+        details ? details.replace(/\n/g, '<br>') : null,
+        $('glossaryPanelDetails')
+    );
 
     // Contributing fats (for properties)
-    const contributorsSection = $('glossaryContributorsSection');
-    const contributorsEl = $('glossaryPanelContributors');
     const category = data.type || data.category;
-
-    if (category === 'property' && PROPERTY_FATTY_ACIDS[term] && recipe.length > 0) {
-        const contributors = calculatePropertyContributors(recipe, fatsDatabase, PROPERTY_FATTY_ACIDS[term]);
-
-        if (contributors.length > 0) {
-            contributorsEl.innerHTML = contributors
-                .map(c => panelListItem(c.name, c.value.toFixed(1)))
-                .join('');
-            contributorsSection.style.display = 'block';
-        } else {
-            contributorsSection.style.display = 'none';
-        }
-    } else {
-        contributorsSection.style.display = 'none';
-    }
+    const contributors = (category === 'property' && PROPERTY_FATTY_ACIDS[term] && recipe.length > 0)
+        ? calculatePropertyContributors(recipe, fatsDatabase, PROPERTY_FATTY_ACIDS[term])
+        : [];
+    showSection(
+        $('glossaryContributorsSection'),
+        contributors.length > 0
+            ? contributors.map(c => panelListItem(c.name, c.value.toFixed(1))).join('')
+            : null,
+        $('glossaryPanelContributors')
+    );
 
     // Related terms
-    const relatedSection = $('glossaryRelatedSection');
     const relatedEl = $('glossaryPanelRelated');
-    if (data.related?.length > 0) {
-        relatedEl.innerHTML = data.related
-            .filter(r => glossaryData[r])
-            .map(r => `<button type="button" class="panel-tag" data-term="${r}">${glossaryData[r].name || glossaryData[r].term}</button>`)
-            .join('');
-        relatedSection.style.display = 'block';
+    const relatedItems = (data.related || []).filter(r => glossaryData[r]);
+    showSection(
+        $('glossaryRelatedSection'),
+        relatedItems.length > 0
+            ? relatedItems
+                .map(r => `<button type="button" class="panel-tag" data-term="${r}">${glossaryData[r].name || glossaryData[r].term}</button>`)
+                .join('')
+            : null,
+        relatedEl
+    );
 
+    if (relatedItems.length > 0) {
         delegate(relatedEl, '.panel-tag', 'click', (_e, el) => {
             if (onTermClick) onTermClick(el.dataset.term);
         });
@@ -365,13 +379,9 @@ export function showGlossaryInfo(term, glossaryData, recipe, fatsDatabase, sourc
             const el = e.target.closest('.panel-tag');
             if (onTermClick && el) onTermClick(el.dataset.term);
         }));
-    } else {
-        relatedSection.style.display = 'none';
     }
 
-    renderReferences($('glossaryPanel'), data.references, sourcesData);
-
-    openPanel('glossaryPanel', ELEMENT_IDS.panelOverlay);
+    openInfoPanel('glossaryPanel', data.references, sourcesData);
 }
 
 /**
@@ -408,10 +418,11 @@ export function showFattyAcidInfo(acidKey, fattyAcidsData, recipe, fatsDatabase,
 
     const acid = fattyAcidsData[acidKey];
 
-    // Name and type
-    $('faName').textContent = acid.name;
     const saturation = acid.description?.saturation || acid.saturation;
-    $('faType').textContent = `${saturation} fatty acid`;
+    setPanelHeader({
+        faName: acid.name,
+        faType: `${saturation} fatty acid`
+    });
 
     // Description: chemistry attributes
     const formula = acid.description?.formula || acid.formula;
@@ -472,9 +483,7 @@ export function showFattyAcidInfo(acidKey, fattyAcidsData, recipe, fatsDatabase,
             `;
         }).join('');
 
-    renderReferences($('fattyAcidPanel'), acid.references, sourcesData);
-
-    openPanel('fattyAcidPanel', ELEMENT_IDS.panelOverlay);
+    openInfoPanel('fattyAcidPanel', acid.references, sourcesData);
 }
 
 // ============================================
@@ -742,7 +751,6 @@ export function showAdditiveInfo(additiveId, additivesDatabase, sourcesData) {
     if (!additiveId || !additivesDatabase[additiveId]) return;
 
     const additive = additivesDatabase[additiveId];
-    const panel = $(ELEMENT_IDS.additiveInfoPanel);
 
     // Infer category/type from item properties (separate files don't have category field)
     let category = additive.type || additive.category;
@@ -758,12 +766,11 @@ export function showAdditiveInfo(additiveId, additivesDatabase, sourcesData) {
         }
     }
 
-    // Name and type
-    $('additivePanelName').textContent = additive.name;
-    $('additivePanelType').textContent = formatCategory(category, additive.subcategory);
-
-    // Description
-    $('additivePanelDescription').textContent = additive.description;
+    setPanelHeader({
+        additivePanelName: additive.name,
+        additivePanelType: formatCategory(category, additive.subcategory),
+        additivePanelDescription: additive.description
+    });
 
     // Details: usage and other attributes as list items
     const usage = additive.details?.usage || additive.usage;
@@ -819,16 +826,13 @@ export function showAdditiveInfo(additiveId, additivesDatabase, sourcesData) {
         }
     }
 
-    if (safetyItems.length > 0) {
-        safetyContainer.innerHTML = safetyItems.join('');
-        safetySection.style.display = 'block';
-    } else {
-        safetySection.style.display = 'none';
-    }
+    showSection(
+        safetySection,
+        safetyItems.length > 0 ? safetyItems.join('') : null,
+        safetyContainer
+    );
 
-    renderReferences(panel, additive.references, sourcesData);
-
-    openPanel(ELEMENT_IDS.additiveInfoPanel, ELEMENT_IDS.panelOverlay);
+    openInfoPanel(ELEMENT_IDS.additiveInfoPanel, additive.references, sourcesData);
 }
 
 /**

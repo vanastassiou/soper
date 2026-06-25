@@ -4,7 +4,7 @@
  */
 
 import { CSS_CLASSES, UI_ICONS } from '../../lib/constants.js';
-import { delegate, onActivate } from '../helpers.js';
+import { delegate, onActivate, setupAbortSignal } from '../helpers.js';
 
 /**
  * @typedef {Object} RowConfig
@@ -252,5 +252,49 @@ export function attachRowEventHandlers(container, callbacks, itemType = 'fat', s
             const el = e.target.closest(nameSelector);
             if (el) fireInfo(el);
         }));
+    }
+}
+
+/**
+ * Render an item list into a container, handling abort-signal lifecycle,
+ * empty-state fallback, optional totals row, and event handler attachment.
+ *
+ * @param {HTMLElement} container - Container element
+ * @param {Array} items - Items to render
+ * @param {Object} options
+ * @param {(item: any, index: number) => string} options.rowFor - Row HTML for one item
+ * @param {string} [options.emptyMessage] - Message shown when items is empty.
+ *   If omitted, the container is cleared instead of showing an empty state.
+ * @param {string} [options.emptyClassName] - Extra class on the empty state.
+ * @param {string} [options.header] - HTML prepended before the rows (e.g. column header).
+ * @param {string} [options.totals] - HTML appended after the rows (e.g. totals row).
+ * @param {Object} [options.callbacks] - Row callbacks; passed to attachRowEventHandlers.
+ * @param {string} [options.itemType='fat'] - Item type for event handler resolution.
+ */
+export function renderList(container, items, options) {
+    const {
+        rowFor,
+        emptyMessage,
+        emptyClassName = '',
+        header = '',
+        totals = '',
+        callbacks,
+        itemType = 'fat'
+    } = options;
+
+    const signal = setupAbortSignal(container);
+
+    if (items.length === 0) {
+        container.innerHTML = emptyMessage
+            ? renderEmptyState(emptyMessage, '', emptyClassName)
+            : '';
+        return;
+    }
+
+    const rows = items.map((item, i) => rowFor(item, i)).join('');
+    container.innerHTML = header + rows + totals;
+
+    if (callbacks) {
+        attachRowEventHandlers(container, callbacks, itemType, signal);
     }
 }

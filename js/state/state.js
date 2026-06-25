@@ -130,14 +130,49 @@ function adjustIndicesAfterRemoval(locksSet, removedIndex) {
     return newLocks;
 }
 
+/**
+ * Create add / remove / update mutators for a state array of `{id, [valueField]}` items.
+ * The reactive proxy treats array reassignment as a change, so each mutator builds
+ * a new array and assigns it back.
+ *
+ * @param {string} stateKey - Property on `state` holding the array
+ * @param {Object} options
+ * @param {string} options.valueField - Field name for the per-item value (e.g. 'weight').
+ * @param {*} [options.defaultValue] - Default value used by `add` when none is supplied.
+ * @param {string} [options.locksKey] - Companion Set on `state` whose indices need
+ *   to shift when an item is removed.
+ * @returns {{ add: Function, remove: Function, update: Function }}
+ */
+function createArrayMutators(stateKey, { valueField, defaultValue, locksKey } = {}) {
+    return {
+        add(id, value = defaultValue) {
+            if (state[stateKey].some(item => item.id === id)) return false;
+            state[stateKey] = [...state[stateKey], { id, [valueField]: value }];
+            return true;
+        },
+        remove(index) {
+            const next = [...state[stateKey]];
+            next.splice(index, 1);
+            state[stateKey] = next;
+            if (locksKey) {
+                state[locksKey] = adjustIndicesAfterRemoval(state[locksKey], index);
+            }
+        },
+        update(index, value) {
+            const next = [...state[stateKey]];
+            next[index] = { ...next[index], [valueField]: parseFloat(value) || 0 };
+            state[stateKey] = next;
+        }
+    };
+}
+
 // ============================================
 // Application State
 // ============================================
 
 export const state = createReactiveState({
     // Recipe state (Select fats mode - percentage-based input)
-    recipe: [],              // Array of {id, percentage, lockedWeight?}
-    recipeLocks: new Set(),  // Set of indices with locked weights
+    recipe: [],              // Array of {id, percentage}
 
     recipeAdditives: [],     // Array of {id, weight}
 
@@ -183,94 +218,19 @@ export const state = createReactiveState({
  */
 const DEFAULT_PERCENTAGE = 10;
 
-/**
- * Add a fat to the recipe
- * @param {string} id - Fat id (kebab-case key)
- * @param {number} percentage - Initial percentage (default 10%)
- * @returns {boolean} True if added, false if already exists
- */
-export function addFatToRecipe(id, percentage = DEFAULT_PERCENTAGE) {
-    if (state.recipe.some(fat => fat.id === id)) {
-        return false;
-    }
-    state.recipe = [...state.recipe, { id, percentage }];
-    return true;
-}
-
-/**
- * Remove a fat from the recipe by index
- * @param {number} index - Index to remove
- */
-export function removeFatFromRecipe(index) {
-    const newRecipe = [...state.recipe];
-    newRecipe.splice(index, 1);
-    state.recipe = newRecipe;
-
-    // Adjust lock indices
-    state.recipeLocks = adjustIndicesAfterRemoval(state.recipeLocks, index);
-}
-
-/**
- * Update a fat's percentage in the recipe
- * @param {number} index - Fat index
- * @param {number} percentage - New percentage
- */
-export function updateFatPercentage(index, percentage) {
-    const newRecipe = [...state.recipe];
-    newRecipe[index] = { ...newRecipe[index], percentage: parseFloat(percentage) || 0 };
-    state.recipe = newRecipe;
-}
-
-/** Toggle lock on a recipe fat (legacy - kept for YOLO/Properties compatibility) */
-export const toggleRecipeLock = createToggleLock('recipeLocks');
-
-/**
- * Lock a recipe fat's weight (sets lockedWeight on the recipe item)
- * @param {number} index - Fat index
- * @param {number} weight - Weight to lock at
- */
-export function lockFatWeight(index, weight) {
-    const newRecipe = [...state.recipe];
-    newRecipe[index] = { ...newRecipe[index], lockedWeight: weight };
-    state.recipe = newRecipe;
-
-    const newLocks = new Set(state.recipeLocks);
-    newLocks.add(index);
-    state.recipeLocks = newLocks;
-}
-
-/**
- * Unlock a recipe fat's weight (removes lockedWeight from the recipe item)
- * @param {number} index - Fat index
- */
-export function unlockFatWeight(index) {
-    const newRecipe = [...state.recipe];
-    const { lockedWeight: _, ...rest } = newRecipe[index];
-    newRecipe[index] = rest;
-    state.recipe = newRecipe;
-
-    const newLocks = new Set(state.recipeLocks);
-    newLocks.delete(index);
-    state.recipeLocks = newLocks;
-}
-
-/**
- * Update a locked recipe fat's weight
- * @param {number} index - Fat index
- * @param {number} weight - New weight
- */
-export function updateLockedWeight(index, weight) {
-    const newRecipe = [...state.recipe];
-    newRecipe[index] = { ...newRecipe[index], lockedWeight: parseFloat(weight) || 0 };
-    state.recipe = newRecipe;
-}
+const recipeMutators = createArrayMutators('recipe', {
+    valueField: 'percentage',
+    defaultValue: DEFAULT_PERCENTAGE
+});
+export const addFatToRecipe = recipeMutators.add;
+export const removeFatFromRecipe = recipeMutators.remove;
+export const updateFatPercentage = recipeMutators.update;
 
 /**
  * Clear the entire recipe
  */
 export function clearRecipe() {
     state.recipe = [];
-    state.recipeLocks = new Set();
 }
 
 /**
@@ -303,40 +263,13 @@ export function removeExclusion(id) {
 // Additive Methods
 // ============================================
 
-/**
- * Add an additive to the recipe
- * @param {string} id - Additive id (kebab-case key)
- * @param {number} weight - Weight in current unit (default from DEFAULTS.ADDITIVE_WEIGHT)
- * @returns {boolean} True if added, false if already exists
- */
-export function addAdditiveToRecipe(id, weight = DEFAULTS.ADDITIVE_WEIGHT) {
-    if (state.recipeAdditives.some(a => a.id === id)) {
-        return false;
-    }
-    state.recipeAdditives = [...state.recipeAdditives, { id, weight }];
-    return true;
-}
-
-/**
- * Remove an additive from the recipe by index
- * @param {number} index - Index to remove
- */
-export function removeAdditiveFromRecipe(index) {
-    const newAdditives = [...state.recipeAdditives];
-    newAdditives.splice(index, 1);
-    state.recipeAdditives = newAdditives;
-}
-
-/**
- * Update an additive's weight in the recipe
- * @param {number} index - Additive index
- * @param {number} weight - New weight
- */
-export function updateAdditiveWeight(index, weight) {
-    const newAdditives = [...state.recipeAdditives];
-    newAdditives[index] = { ...newAdditives[index], weight: parseFloat(weight) || 0 };
-    state.recipeAdditives = newAdditives;
-}
+const additiveMutators = createArrayMutators('recipeAdditives', {
+    valueField: 'weight',
+    defaultValue: DEFAULTS.ADDITIVE_WEIGHT
+});
+export const addAdditiveToRecipe = additiveMutators.add;
+export const removeAdditiveFromRecipe = additiveMutators.remove;
+export const updateAdditiveWeight = additiveMutators.update;
 
 // ============================================
 // YOLO Methods
@@ -423,41 +356,14 @@ export function clearPropertiesRecipe() {
 // Cupboard Cleaner Methods
 // ============================================
 
-/**
- * Add a fat to the cupboard
- * @param {string} id - Fat id (kebab-case key)
- * @param {number} weight - Weight in grams
- * @returns {boolean} True if added, false if already exists
- */
-export function addCupboardFat(id, weight = DEFAULTS.FAT_WEIGHT) {
-    if (state.cupboardFats.some(fat => fat.id === id)) {
-        return false;
-    }
-    state.cupboardFats = [...state.cupboardFats, { id, weight }];
-    return true;
-}
-
-/**
- * Remove a fat from the cupboard by index
- * @param {number} index - Index to remove
- */
-export function removeCupboardFat(index) {
-    const newFats = [...state.cupboardFats];
-    newFats.splice(index, 1);
-    state.cupboardFats = newFats;
-    state.cupboardLocks = adjustIndicesAfterRemoval(state.cupboardLocks, index);
-}
-
-/**
- * Update a cupboard fat's weight
- * @param {number} index - Fat index
- * @param {number} weight - New weight
- */
-export function updateCupboardFatWeight(index, weight) {
-    const newFats = [...state.cupboardFats];
-    newFats[index] = { ...newFats[index], weight: parseFloat(weight) || 0 };
-    state.cupboardFats = newFats;
-}
+const cupboardFatMutators = createArrayMutators('cupboardFats', {
+    valueField: 'weight',
+    defaultValue: DEFAULTS.FAT_WEIGHT,
+    locksKey: 'cupboardLocks'
+});
+export const addCupboardFat = cupboardFatMutators.add;
+export const removeCupboardFat = cupboardFatMutators.remove;
+export const updateCupboardFatWeight = cupboardFatMutators.update;
 
 /**
  * Clear all cupboard fats
@@ -479,27 +385,11 @@ export function setCupboardSuggestions(suggestions) {
     state.cupboardSuggestions = suggestions;
 }
 
-/**
- * Remove a suggestion from the cupboard suggestions by index
- * @param {number} index - Index to remove
- */
-export function removeCupboardSuggestion(index) {
-    const newSuggestions = [...state.cupboardSuggestions];
-    newSuggestions.splice(index, 1);
-    state.cupboardSuggestions = newSuggestions;
-}
-
-/**
- * Update a cupboard suggestion's weight
- * @param {number} index - Suggestion index
- * @param {number} weight - New weight
- */
-export function updateCupboardSuggestionWeight(index, weight) {
-    const newSuggestions = [...state.cupboardSuggestions];
-    const newWeight = parseFloat(weight) || 0;
-    newSuggestions[index] = { ...newSuggestions[index], weight: newWeight };
-    state.cupboardSuggestions = newSuggestions;
-}
+const cupboardSuggestionMutators = createArrayMutators('cupboardSuggestions', {
+    valueField: 'weight'
+});
+export const removeCupboardSuggestion = cupboardSuggestionMutators.remove;
+export const updateCupboardSuggestionWeight = cupboardSuggestionMutators.update;
 
 /**
  * Set whether ratio mode is allowed
@@ -549,9 +439,8 @@ const STORAGE_KEY = 'soapCalculatorState';
 export function saveState() {
     try {
         const dataToSave = {
-            version: 3, // Track format version for migration
+            version: 4, // Track format version for migration
             recipe: state.recipe,
-            recipeLocks: Array.from(state.recipeLocks),
             excludedFats: state.excludedFats,
             recipeAdditives: state.recipeAdditives,
             // Cupboard cleaner state
@@ -595,25 +484,14 @@ export function restoreState() {
             // Handle recipe - migrate from v1 (weight-based) to v2 (percentage-based)
             if (Array.isArray(data.recipe)) {
                 if (data.version >= 2) {
-                    // Already in new format
                     state.recipe = data.recipe;
                 } else if (data.recipe.length > 0 && 'weight' in data.recipe[0]) {
-                    // Old format - migrate
                     state.recipe = migrateRecipeToPercentage(data.recipe);
                 } else {
                     state.recipe = data.recipe;
                 }
-            }
-
-            // Handle locks - migrate old names to new
-            // v3 changed lock semantics from percentage to weight, so clear locks from v2
-            if (data.version >= 3 && Array.isArray(data.recipeLocks)) {
-                state.recipeLocks = new Set(data.recipeLocks);
-            } else {
-                // v2 or earlier: clear locks (semantics changed)
-                state.recipeLocks = new Set();
-                // Also strip any stale lockedWeight from recipe items
-                if (state.recipe.length > 0) {
+                // Strip any lockedWeight left over from v3 — locking was removed in v4
+                if (state.recipe.length > 0 && state.recipe.some(f => 'lockedWeight' in f)) {
                     state.recipe = state.recipe.map(({ lockedWeight: _, ...rest }) => rest);
                 }
             }

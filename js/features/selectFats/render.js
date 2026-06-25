@@ -3,12 +3,8 @@
  * Moved from js/ui/ui.js as part of the per-feature split.
  */
 
-import { populateSelect, setupAbortSignal } from '../../ui/helpers.js';
-import {
-    attachRowEventHandlers,
-    renderEmptyState,
-    renderItemRow
-} from '../../ui/components/itemRow.js';
+import { populateSelect } from '../../ui/helpers.js';
+import { renderItemRow, renderList } from '../../ui/components/itemRow.js';
 import { UI_MESSAGES } from '../../lib/constants.js';
 
 /**
@@ -19,54 +15,17 @@ export function populateFatSelect(selectElement, fatsDatabase, excludeIds = [], 
 }
 
 /**
- * Render the recipe fats list (Select fats mode - weight-lockable).
+ * Render the recipe fats list (Select fats mode).
  * @param {HTMLElement} container
- * @param {Array} recipe - [{id, percentage, lockedWeight?}]
- * @param {Set} locks - Set of locked indices
+ * @param {Array} recipe - [{id, percentage}]
  * @param {Object} fatsDatabase
- * @param {Object} callbacks - {onPercentageChange, onWeightChange, onToggleLock, onRemove, onFatInfo}
+ * @param {Object} callbacks - {onPercentageChange, onRemove, onFatInfo}
  * @param {number} recipeWeight - Total recipe weight from settings
  * @param {string} unit - Unit label (g or oz)
  */
-export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks, recipeWeight, unit) {
-    const signal = setupAbortSignal(container);
-
-    if (recipe.length === 0) {
-        container.innerHTML = renderEmptyState(UI_MESSAGES.NO_FATS_ADDED);
-        return;
-    }
-
+export function renderRecipe(container, recipe, fatsDatabase, callbacks, recipeWeight, unit) {
     const totalPercentage = recipe.reduce((sum, fat) => sum + fat.percentage, 0);
     const totalWeight = recipeWeight * totalPercentage / 100;
-
-    const rows = recipe.map((fat, i) => {
-        const fatData = fatsDatabase[fat.id];
-        const isLocked = locks.has(i);
-        const derivedWeight = recipeWeight * fat.percentage / 100;
-        const displayWeight = isLocked && fat.lockedWeight != null
-            ? parseFloat(fat.lockedWeight.toFixed(1))
-            : parseFloat(derivedWeight.toFixed(1));
-
-        const displayPercentage = isLocked
-            ? parseFloat(fat.percentage.toFixed(1))
-            : fat.percentage;
-
-        return renderItemRow({
-            id: fat.id,
-            name: fatData?.name || fat.id,
-            weight: displayWeight,
-            percentage: displayPercentage,
-            isLocked
-        }, i, {
-            inputType: isLocked ? 'weight' : 'percentage',
-            showWeight: true,
-            showPercentage: true,
-            lockableField: 'weight',
-            itemType: 'fat',
-            unit
-        });
-    }).join('');
-
     const percentWarning = Math.abs(totalPercentage - 100) > 0.1 ? 'percentage-warning' : '';
     const totalsRow = `
         <div class="totals-row">
@@ -77,13 +36,30 @@ export function renderRecipe(container, recipe, locks, fatsDatabase, callbacks, 
         </div>
     `;
 
-    container.innerHTML = rows + totalsRow;
+    renderList(container, recipe, {
+        emptyMessage: UI_MESSAGES.NO_FATS_ADDED,
+        totals: totalsRow,
+        callbacks: {
+            onPercentageChange: callbacks.onPercentageChange,
+            onRemove: callbacks.onRemove,
+            onInfo: callbacks.onFatInfo
+        },
+        rowFor: (fat, i) => {
+            const fatData = fatsDatabase[fat.id];
+            const derivedWeight = recipeWeight * fat.percentage / 100;
 
-    attachRowEventHandlers(container, {
-        onPercentageChange: callbacks.onPercentageChange,
-        onWeightChange: callbacks.onWeightChange,
-        onToggleLock: callbacks.onToggleLock,
-        onRemove: callbacks.onRemove,
-        onInfo: callbacks.onFatInfo
-    }, 'fat', signal);
+            return renderItemRow({
+                id: fat.id,
+                name: fatData?.name || fat.id,
+                weight: parseFloat(derivedWeight.toFixed(1)),
+                percentage: fat.percentage
+            }, i, {
+                inputType: 'percentage',
+                showWeight: true,
+                showPercentage: true,
+                itemType: 'fat',
+                unit
+            });
+        }
+    });
 }
