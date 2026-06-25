@@ -1,5 +1,21 @@
 {
+  "name": "soper",
+  "description": "Client-side soap recipe calculator (vanilla JS, no build step)",
+  "private": true,
+  "scripts": {
+    "build:sw": "node scripts/generate-sw-manifest.mjs",
+    "check:sw": "node scripts/generate-sw-manifest.mjs --check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "vitest bench --run",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.9",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

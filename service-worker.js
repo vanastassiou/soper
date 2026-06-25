@@ -4,80 +4,112 @@
  */
 
 // Cache version - increment to force cache invalidation on deploy
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const STATIC_CACHE_NAME = `soap-calc-static-v${CACHE_VERSION}`;
 const DATA_CACHE_NAME = `soap-calc-data-v${CACHE_VERSION}`;
 
-// Static assets to cache on install
+// Static assets to cache on install (cache-first).
+// The arrays below are generated from the filesystem by
+// `scripts/generate-sw-manifest.mjs` (run `npm run build:sw` before deploy).
+// Do not edit the lines between the markers by hand — they will be overwritten.
 const STATIC_ASSETS = [
+    // --- BEGIN GENERATED STATIC_ASSETS (npm run build:sw) ---
     '/',
     '/index.html',
     '/styles.css',
     '/manifest.json',
-    // Core JS modules
-    '/js/main.js',
     '/js/core/calculator.js',
     '/js/core/optimizer.js',
-    '/js/core/optimizer/index.js',
-    '/js/core/optimizer/scoring.js',
-    '/js/core/optimizer/optimization.js',
-    '/js/core/optimizer/generation.js',
-    '/js/core/optimizer/dietary.js',
-    '/js/core/optimizer/cupboard.js',
+    '/js/features/additives/index.js',
+    '/js/features/additives/render.js',
+    '/js/features/cupboard/index.js',
+    '/js/features/cupboard/render.js',
+    '/js/features/profileBuilder/index.js',
+    '/js/features/profileBuilder/render.js',
+    '/js/features/selectFats/index.js',
+    '/js/features/selectFats/render.js',
+    '/js/features/yolo/index.js',
+    '/js/features/yolo/render.js',
+    '/js/lib/cards.js',
     '/js/lib/constants.js',
-    '/js/lib/patterns.js',
-    '/js/lib/validation.js',
+    '/js/lib/dietary.js',
     '/js/lib/references.js',
-    '/js/lib/additiveConfig.js',
+    '/js/lib/validation.js',
+    '/js/main.js',
     '/js/state/state.js',
-    '/js/ui/ui.js',
-    '/js/ui/helpers.js',
-    '/js/ui/panels.js',
-    '/js/ui/panelManager.js',
-    '/js/ui/renderers.js',
-    '/js/ui/finalRecipe.js',
     '/js/ui/components/itemRow.js',
     '/js/ui/components/toast.js',
-    '/js/ui/components/errorBoundary.js'
+    '/js/ui/finalRecipe.js',
+    '/js/ui/helpers.js',
+    '/js/ui/panelManager.js',
+    '/js/ui/properties.js',
+    '/js/ui/ui.js',
+    '/js/vendor/ajv.min.js',
+    '/icons/icon-192.svg',
+    '/icons/icon-512.svg',
+    // --- END GENERATED STATIC_ASSETS ---
 ];
 
-// Data files to cache (can be updated more frequently)
+// Data files to cache (network-first, updated more frequently).
 const DATA_ASSETS = [
+    // --- BEGIN GENERATED DATA_ASSETS (npm run build:sw) ---
+    '/data/colourants.json',
+    '/data/equipment.json',
     '/data/fats.json',
     '/data/fatty-acids.json',
-    '/data/glossary.json',
-    '/data/tooltips.json',
-    '/data/sources.json',
     '/data/formulas.json',
     '/data/fragrances.json',
-    '/data/colourants.json',
-    '/data/soap-performance.json',
-    '/data/skin-care.json',
+    '/data/glossary.json',
+    '/data/processes.json',
+    '/data/schemas/colourants.schema.json',
+    '/data/schemas/common-definitions.schema.json',
+    '/data/schemas/equipment.schema.json',
     '/data/schemas/fats.schema.json',
     '/data/schemas/fatty-acids.schema.json',
-    '/data/schemas/glossary.schema.json',
-    '/data/schemas/tooltips.schema.json',
-    '/data/schemas/sources.schema.json',
     '/data/schemas/formulas.schema.json',
     '/data/schemas/fragrances.schema.json',
-    '/data/schemas/colourants.schema.json',
-    '/data/schemas/soap-performance.schema.json',
+    '/data/schemas/glossary.schema.json',
+    '/data/schemas/processes.schema.json',
     '/data/schemas/skin-care.schema.json',
-    '/data/schemas/common-definitions.schema.json'
+    '/data/schemas/soap-performance.schema.json',
+    '/data/schemas/sources.schema.json',
+    '/data/schemas/tooltips.schema.json',
+    '/data/skin-care.json',
+    '/data/soap-performance.json',
+    '/data/sources.json',
+    '/data/tooltips.json',
+    // --- END GENERATED DATA_ASSETS ---
 ];
+
+/**
+ * Cache a list of assets, logging any individual failure instead of failing
+ * the whole install. `cache.addAll()` is atomic: one missing path rejects the
+ * entire batch and the cache silently stays empty. Adding paths individually
+ * keeps the rest of the cache populated and surfaces exactly which path failed.
+ * @param {string} cacheName - Target cache
+ * @param {string[]} assets - Web paths to cache
+ */
+async function cacheAssets(cacheName, assets) {
+    const cache = await caches.open(cacheName);
+    const results = await Promise.allSettled(assets.map((asset) => cache.add(asset)));
+    const failed = results
+        .map((result, i) => ({ result, asset: assets[i] }))
+        .filter(({ result }) => result.status === 'rejected');
+
+    for (const { result, asset } of failed) {
+        console.error(`[SW] Failed to cache ${asset}:`, result.reason?.message || result.reason);
+    }
+    if (failed.length > 0) {
+        console.error(`[SW] ${failed.length}/${assets.length} assets failed to cache in ${cacheName}`);
+    }
+}
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
     event.waitUntil(
         Promise.all([
-            caches.open(STATIC_CACHE_NAME).then((cache) => {
-                console.log('[SW] Caching static assets');
-                return cache.addAll(STATIC_ASSETS);
-            }),
-            caches.open(DATA_CACHE_NAME).then((cache) => {
-                console.log('[SW] Caching data assets');
-                return cache.addAll(DATA_ASSETS);
-            })
+            cacheAssets(STATIC_CACHE_NAME, STATIC_ASSETS),
+            cacheAssets(DATA_CACHE_NAME, DATA_ASSETS)
         ]).then(() => {
             console.log('[SW] Installation complete');
             return self.skipWaiting();
