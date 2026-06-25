@@ -2,6 +2,7 @@
  * Properties view - Property glossary terms with related formulas
  */
 
+import { renderEntryCard } from '../../../../js/lib/cards.js';
 import { renderReferencesHtml, renderRelatedLinks, renderEmptyState, formatDetailsText } from '../shared/render.js';
 
 export function renderProperties(data, container) {
@@ -20,13 +21,12 @@ export function renderProperties(data, container) {
             fData.related?.includes(key) || fKey.includes(key)
         );
 
-        return `
-            <article class="entry-card entry-card--property" data-key="${key}">
-                <header class="entry-header">
-                    <h2 class="entry-title">${d.name}</h2>
-                </header>
-                <p class="entry-desc">${d.description}</p>
-
+        return renderEntryCard({
+            key,
+            name: d.name,
+            description: d.description,
+            modifier: '--property',
+            extraContent: `
                 ${d.details ? `
                     <div class="property-details">
                         ${formatDetailsText(d.details)}
@@ -46,7 +46,7 @@ export function renderProperties(data, container) {
 
                 ${renderRelatedLinks(d.related, glossary)}
                 ${renderReferencesHtml(d.references, sources)}
-            </article>
-        `;
+            `
+        });
     }).join('');
 }

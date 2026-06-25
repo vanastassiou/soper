@@ -4,6 +4,7 @@
  */
 
 import { $ } from '../../../js/ui/helpers.js';
+import { renderEntryCard } from '../../../js/lib/cards.js';
 import { TIMING } from '../../../js/lib/constants.js';
 import { renderReferencesHtml } from '../../../js/lib/references.js';
 import { setupCategoryFilters } from './filters.js';
@@ -64,13 +65,12 @@ function renderFatCard(key, data) {
     const usage = details.usage || {};
     const fattyAcids = details.fattyAcids || {};
 
-    return `
-        <article class="entry-card" data-key="${key}" data-type="fat">
-            <header class="entry-header">
-                <h2 class="entry-title">${data.name}</h2>
-            </header>
-            ${data.description ? `<p class="entry-desc">${data.description}</p>` : ''}
-
+    return renderEntryCard({
+        key,
+        name: data.name,
+        description: data.description,
+        dataAttrs: { type: 'fat' },
+        extraContent: `
             ${sap.naoh || sap.koh || details.iodine || details.ins || usage.min !== undefined || usage.max !== undefined ? `
                 <details class="entry-details">
                     <summary>
@@ -118,8 +118,8 @@ function renderFatCard(key, data) {
             ` : ''}
 
             ${renderReferencesHtml(data.references, sourcesData)}
-        </article>
-    `;
+        `
+    });
 }
 
 function renderAdditiveCard(key, data) {
@@ -142,13 +142,12 @@ function renderAdditiveCard(key, data) {
     if (safety.maxConcentration) properties.push(`<div class="fatty-acid-item"><dt>Max concentration</dt><dd>${safety.maxConcentration}%</dd></div>`);
     if (usage.min !== undefined || usage.max !== undefined) properties.push(`<div class="fatty-acid-item"><dt>Usage</dt><dd>${usage.min || 0}% - ${usage.max || 100}%${usage.basis ? ` (${usage.basis})` : ''}</dd></div>`);
 
-    return `
-        <article class="entry-card" data-key="${key}" data-type="additive">
-            <header class="entry-header">
-                <h2 class="entry-title">${data.name}</h2>
-            </header>
-            ${data.description ? `<p class="entry-desc">${data.description}</p>` : ''}
-
+    return renderEntryCard({
+        key,
+        name: data.name,
+        description: data.description,
+        dataAttrs: { type: 'additive' },
+        extraContent: `
             ${properties.length > 0 ? `
                 <details class="entry-details">
                     <summary>
@@ -195,8 +194,8 @@ function renderAdditiveCard(key, data) {
             ` : ''}
 
             ${renderReferencesHtml(data.references, sourcesData)}
-        </article>
-    `;
+        `
+    });
 }
 
 function addEntries(entries, data, type) {

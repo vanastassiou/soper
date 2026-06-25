@@ -141,23 +141,3 @@ export function formatDetailsText(text) {
     return result.join('');
 }
 
-/**
- * Render a basic entry card
- * @param {string} key - Entry key
- * @param {Object} data - Entry data
- * @param {string} extraContent - Additional HTML content
- * @param {string} modifier - CSS class modifier (e.g., '--property')
- * @returns {string} HTML string
- */
-export function renderEntryCard(key, data, extraContent = '', modifier = '') {
-    const modifierClass = modifier ? ` entry-card${modifier}` : '';
-    return `
-        <article class="entry-card${modifierClass}" data-key="${key}">
-            <header class="entry-header">
-                <h2 class="entry-title">${data.name}</h2>
-            </header>
-            <p class="entry-desc">${data.description}</p>
-            ${extraContent}
-        </article>
-    `;
-}

@@ -4,6 +4,7 @@
  */
 
 import { $ } from '../../../js/ui/helpers.js';
+import { renderEntryCard } from '../../../js/lib/cards.js';
 import { TIMING } from '../../../js/lib/constants.js';
 import { renderReferencesHtml } from '../../../js/lib/references.js';
 import { setupCategoryFilters } from './filters.js';
@@ -36,12 +37,11 @@ function renderGlossary() {
         return;
     }
 
-    container.innerHTML = entries.map(([key, data]) => `
-        <article class="entry-card" data-key="${key}">
-            <header class="entry-header">
-                <h2 class="entry-title">${data.name}</h2>
-            </header>
-            <p class="entry-desc">${data.description}</p>
+    container.innerHTML = entries.map(([key, data]) => renderEntryCard({
+        key,
+        name: data.name,
+        description: data.description,
+        extraContent: `
             ${data.details ? `
                 <details class="entry-details">
                     <summary>
@@ -61,8 +61,8 @@ function renderGlossary() {
                 </div>
             ` : ''}
             ${renderReferencesHtml(data.references, sourcesData)}
-        </article>
-    `).join('');
+        `
+    })).join('');
 
     // Handle related term clicks
     container.querySelectorAll('.entry-related-link').forEach(link => {

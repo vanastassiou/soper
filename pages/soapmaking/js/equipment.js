@@ -4,6 +4,7 @@
  */
 
 import { $ } from '../../../js/ui/helpers.js';
+import { renderEntryCard } from '../../../js/lib/cards.js';
 import { TIMING } from '../../../js/lib/constants.js';
 import { renderReferencesHtml } from '../../../js/lib/references.js';
 import { setupCategoryFilters } from './filters.js';
@@ -36,12 +37,11 @@ function renderEquipment() {
         return;
     }
 
-    container.innerHTML = entries.map(([key, data]) => `
-        <article class="entry-card" data-key="${key}">
-            <header class="entry-header">
-                <h2 class="entry-title">${data.name}</h2>
-            </header>
-            <p class="entry-desc">${data.description}</p>
+    container.innerHTML = entries.map(([key, data]) => renderEntryCard({
+        key,
+        name: data.name,
+        description: data.description,
+        extraContent: `
             ${data.safetyNotes?.length > 0 ? `
                 <div class="entry-safety">
                     <h3 class="entry-subheading">Safety notes</h3>
@@ -74,8 +74,8 @@ function renderEquipment() {
                 </details>
             ` : ''}
             ${renderReferencesHtml(data.references, sourcesData)}
-        </article>
-    `).join('');
+        `
+    })).join('');
 }
 
 currentCategory = setupCategoryFilters({

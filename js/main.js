@@ -216,6 +216,21 @@ function handleStartOver() {
     calculate();
 }
 
+function resetDietaryFilters() {
+    for (const id of [
+        ELEMENT_IDS.filterAnimalBased,
+        ELEMENT_IDS.filterSourcingConcerns,
+        ELEMENT_IDS.filterCommonAllergens,
+        ELEMENT_IDS.includeExoticFats
+    ]) {
+        const el = $(id);
+        if (el) el.checked = false;
+    }
+    state.excludedFats = [];
+    updateExclusionUI();
+    updateFatSelectWithFilters();
+}
+
 function handleResetSettings() {
     // Reset settings to defaults
     const lyeType = $(ELEMENT_IDS.lyeType);
@@ -230,20 +245,7 @@ function handleResetSettings() {
     if (recipeWeight) recipeWeight.value = String(DEFAULTS.BASE_RECIPE_WEIGHT);
     previousUnit = 'g';
 
-    // Reset dietary filters
-    const filterAnimal = $(ELEMENT_IDS.filterAnimalBased);
-    const filterSourcing = $(ELEMENT_IDS.filterSourcingConcerns);
-    const filterAllergens = $(ELEMENT_IDS.filterCommonAllergens);
-    const includeExotic = $(ELEMENT_IDS.includeExoticFats);
-    if (filterAnimal) filterAnimal.checked = false;
-    if (filterSourcing) filterSourcing.checked = false;
-    if (filterAllergens) filterAllergens.checked = false;
-    if (includeExotic) includeExotic.checked = false;
-
-    // Clear exclusions
-    state.excludedFats = [];
-    updateExclusionUI();
-    updateFatSelectWithFilters();
+    resetDietaryFilters();
     calculate();
 }
 
@@ -259,22 +261,7 @@ function handleResetAdditives() {
 }
 
 function handleResetFilters() {
-    // Clear dietary filter checkboxes
-    const filterAnimal = $(ELEMENT_IDS.filterAnimalBased);
-    const filterSourcing = $(ELEMENT_IDS.filterSourcingConcerns);
-    const filterAllergens = $(ELEMENT_IDS.filterCommonAllergens);
-    const includeExotic = $(ELEMENT_IDS.includeExoticFats);
-    if (filterAnimal) filterAnimal.checked = false;
-    if (filterSourcing) filterSourcing.checked = false;
-    if (filterAllergens) filterAllergens.checked = false;
-    if (includeExotic) includeExotic.checked = false;
-
-    // Clear excluded fats list
-    state.excludedFats = [];
-
-    // Update UI
-    updateExclusionUI();
-    updateFatSelectWithFilters();
+    resetDietaryFilters();
 }
 
 function handleUnitChange() {
@@ -643,15 +630,20 @@ function setupPanelHandlers() {
         }
     });
 
-    const showGlossaryTerm = (term, triggerElement) => {
+    // Focus the close button of a freshly opened panel so screen-readers and
+    // keyboard users land inside the panel rather than behind it.
+    const openPanelAndFocus = (panelId, triggerElement) => {
         if (triggerElement) lastFocusedElement = triggerElement;
-        ui.showGlossaryInfo(term, state.glossaryData, state.recipe, state.fatsDatabase, state.sourcesData, showGlossaryTerm);
-        // Move focus to the panel
-        const panel = $('glossaryPanel');
+        const panel = $(panelId);
         if (panel) {
             const closeBtn = panel.querySelector('.close-panel');
             if (closeBtn) closeBtn.focus();
         }
+    };
+
+    const showGlossaryTerm = (term, triggerElement) => {
+        ui.showGlossaryInfo(term, state.glossaryData, state.recipe, state.fatsDatabase, state.sourcesData, showGlossaryTerm);
+        openPanelAndFocus('glossaryPanel', triggerElement);
     };
 
     // Helper for keyboard activation (Enter/Space)
@@ -668,32 +660,13 @@ function setupPanelHandlers() {
         link.addEventListener('keydown', (e) => handleKeyboardActivation(e, handler));
     });
 
-    document.querySelectorAll('.fa-link').forEach(link => {
-        const handler = () => {
-            lastFocusedElement = link;
-            ui.showFattyAcidInfo(link.dataset.acid, state.fattyAcidsData, state.recipe, state.fatsDatabase, state.sourcesData);
-            // Move focus to the panel
-            const panel = $('fattyAcidPanel');
-            if (panel) {
-                const closeBtn = panel.querySelector('.close-panel');
-                if (closeBtn) closeBtn.focus();
-            }
-        };
-        link.addEventListener('click', handler);
-        link.addEventListener('keydown', (e) => handleKeyboardActivation(e, handler));
-    });
-
-    // Event delegation for dynamically rendered fa-links (e.g., in final recipe)
+    // Event delegation for .fa-link buttons, which are only rendered dynamically
+    // (currently in the final recipe).
     document.addEventListener('click', (e) => {
         const faLink = e.target.closest('.fa-link');
         if (faLink && faLink.dataset.acid) {
-            lastFocusedElement = faLink;
             ui.showFattyAcidInfo(faLink.dataset.acid, state.fattyAcidsData, state.recipe, state.fatsDatabase, state.sourcesData);
-            const panel = $('fattyAcidPanel');
-            if (panel) {
-                const closeBtn = panel.querySelector('.close-panel');
-                if (closeBtn) closeBtn.focus();
-            }
+            openPanelAndFocus('fattyAcidPanel', faLink);
         }
     });
 }

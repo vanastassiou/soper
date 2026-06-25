@@ -5,7 +5,7 @@
 
 import { CSS_CLASSES, ELEMENT_IDS, FATTY_ACID_KEYS, FATTY_ACID_NAMES, PROPERTY_RANGES } from '../lib/constants.js';
 import { resolveReference } from '../lib/references.js';
-import { $, formatProseList } from './helpers.js';
+import { $ } from './helpers.js';
 
 // ============================================
 // Qualitative Summary
@@ -17,6 +17,13 @@ import { $, formatProseList } from './helpers.js';
  * @param {Array} notes - Recipe notes array from calculator
  * @returns {string} HTML for qualitative summary
  */
+const QUALITATIVE_LABELS = {
+    hardness:         { low: 'soft',    mid: 'firm',     high: 'very hard' },
+    degreasing:       { low: 'gentle',  mid: 'moderate', high: 'strong' },
+    'lather-volume':  { low: 'minimal', mid: 'good',     high: 'abundant' },
+    'lather-density': { low: 'light',   mid: 'creamy',   high: 'rich' }
+};
+
 function buildQualitativeSummary(properties, notes = []) {
     const R = PROPERTY_RANGES;
 
@@ -27,41 +34,19 @@ function buildQualitativeSummary(properties, notes = []) {
         return 'mid';
     };
 
-    // Hardness description
-    const hardnessLevel = classify(properties.hardness, R.hardness);
-    const hardnessText = {
-        low: 'soft',
-        mid: 'firm',
-        high: 'very hard'
-    }[hardnessLevel];
+    const levels = {};
+    const text = {};
+    for (const [prop, labels] of Object.entries(QUALITATIVE_LABELS)) {
+        levels[prop] = classify(properties[prop], R[prop]);
+        text[prop] = labels[levels[prop]];
+    }
 
-    // Degreasing description
-    const degreasingLevel = classify(properties.degreasing, R.degreasing);
-    const degreasingText = {
-        low: 'gentle',
-        mid: 'moderate',
-        high: 'strong'
-    }[degreasingLevel];
+    const summary =
+        `Produces a ${text.hardness} bar with ${text.degreasing} degreasing ability. ` +
+        `Lather is ${text['lather-volume']} with a ${text['lather-density']} texture.`;
 
-    // Lather volume description
-    const latherVolumeLevel = classify(properties['lather-volume'], R['lather-volume']);
-    const latherVolumeText = {
-        low: 'minimal',
-        mid: 'good',
-        high: 'abundant'
-    }[latherVolumeLevel];
-
-    // Lather density description
-    const latherDensityLevel = classify(properties['lather-density'], R['lather-density']);
-    const latherDensityText = {
-        low: 'light',
-        mid: 'creamy',
-        high: 'rich'
-    }[latherDensityLevel];
-
-    // Build main description
-    let summary = `Produces a ${hardnessText} bar with ${degreasingText} degreasing ability. `;
-    summary += `Lather is ${latherVolumeText} with a ${latherDensityText} texture.`;
+    const hardnessLevel = levels.hardness;
+    const degreasingLevel = levels.degreasing;
 
     // Collect all warnings - start with calculator-generated notes
     const warnings = notes.map(note => note.text);
@@ -118,39 +103,6 @@ function formatWeight(weight, unit) {
     return `${weight.toFixed(2)} ${unit}`;
 }
 
-/**
- * Format fat list in prose
- * @param {Array} recipe - Recipe array of {id, weight}
- * @param {Object} fatsDatabase - Fat database
- * @param {string} unit - Unit string
- * @returns {string} Prose list of fats
- */
-function formatFatsList(recipe, fatsDatabase, unit) {
-    if (recipe.length === 0) return 'No fats added';
-
-    return formatProseList(recipe, fat => {
-        const fatData = fatsDatabase[fat.id];
-        const name = fatData ? fatData.name : fat.id;
-        return `${formatWeight(fat.weight, unit)} ${name}`;
-    });
-}
-
-/**
- * Format additives list in prose
- * @param {Array} recipeAdditives - Additives array of {id, weight}
- * @param {Object} additivesDatabase - Additives database
- * @param {string} unit - Unit string
- * @returns {string} Prose list of additives
- */
-function formatAdditivesList(recipeAdditives, additivesDatabase, unit) {
-    if (recipeAdditives.length === 0) return '';
-
-    return formatProseList(recipeAdditives, item => {
-        const additive = additivesDatabase[item.id];
-        const name = additive ? additive.name : item.id;
-        return `${formatWeight(item.weight, unit)} ${name}`;
-    });
-}
 
 // ============================================
 // Recipe Procedure Templates

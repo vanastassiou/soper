@@ -2,6 +2,7 @@
  * Glossary view - Scientific concept terms
  */
 
+import { renderEntryCard } from '../../../../js/lib/cards.js';
 import { renderReferencesHtml, renderRelatedLinks, renderDetails, renderEmptyState, formatDetailsText } from '../shared/render.js';
 
 const HIGHLIGHT_DURATION = 2000;
@@ -17,17 +18,16 @@ export function renderGlossary(data, container, targetKey = null) {
 
     if (renderEmptyState(container, entries, 'No concepts found.')) return;
 
-    container.innerHTML = entries.map(([key, d]) => `
-        <article class="entry-card" data-key="${key}">
-            <header class="entry-header">
-                <h2 class="entry-title">${d.name}</h2>
-            </header>
-            <p class="entry-desc">${d.description}</p>
+    container.innerHTML = entries.map(([key, d]) => renderEntryCard({
+        key,
+        name: d.name,
+        description: d.description,
+        extraContent: `
             ${renderDetails('More details', 'Hide details', formatDetailsText(d.details))}
             ${renderRelatedLinks(d.related, glossary, { dataAttr: true })}
             ${renderReferencesHtml(d.references, sources)}
-        </article>
-    `).join('');
+        `
+    })).join('');
 
     // Handle related term clicks - scroll within glossary
     container.querySelectorAll('.entry-related-link').forEach(link => {

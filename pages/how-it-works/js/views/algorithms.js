@@ -2,6 +2,7 @@
  * Algorithms view - Formulas with category filtering
  */
 
+import { renderEntryCard } from '../../../../js/lib/cards.js';
 import { renderReferencesHtml, renderRelatedLinks, renderDetails, renderEmptyState } from '../shared/render.js';
 
 let currentCategory = 'all';
@@ -21,45 +22,39 @@ export function renderAlgorithms(data, container, filterNav, category = 'all') {
 
     if (renderEmptyState(container, entries, 'No formulas found in this category.')) return;
 
-    container.innerHTML = entries.map(([key, d]) => {
-        const technicalContent = buildTechnicalContent(d);
-        return `
-            <article class="entry-card" data-key="${key}">
-                <header class="entry-header">
-                    <h2 class="entry-title">${d.name}</h2>
-                </header>
+    container.innerHTML = entries.map(([key, d]) => renderEntryCard({
+        key,
+        name: d.name,
+        description: d.summary,
+        extraContent: `
+            <div class="formula-equation">
+                <code>${d.formula}</code>
+            </div>
 
-                <p class="entry-desc">${d.summary}</p>
+            <div class="formula-user-friendly">
+                <p>${d.userFriendly}</p>
+            </div>
 
-                <div class="formula-equation">
-                    <code>${d.formula}</code>
+            ${d.recommendedRange ? `
+                <div class="formula-range">
+                    <span class="range-label">Recommended range:</span>
+                    <span class="range-values">${d.recommendedRange.min} - ${d.recommendedRange.max}</span>
                 </div>
+            ` : ''}
 
-                <div class="formula-user-friendly">
-                    <p>${d.userFriendly}</p>
+            ${renderDetails('Technical details', 'Hide technical details', buildTechnicalContent(d))}
+
+            ${renderReferencesHtml(d.references, sources)}
+
+            ${d.learnMore ? `
+                <div class="entry-learn-more">
+                    <a href="${d.learnMore.url}" target="_blank" rel="noopener noreferrer" class="learn-more-link">${d.learnMore.text} →</a>
                 </div>
+            ` : ''}
 
-                ${d.recommendedRange ? `
-                    <div class="formula-range">
-                        <span class="range-label">Recommended range:</span>
-                        <span class="range-values">${d.recommendedRange.min} - ${d.recommendedRange.max}</span>
-                    </div>
-                ` : ''}
-
-                ${renderDetails('Technical details', 'Hide technical details', technicalContent)}
-
-                ${renderReferencesHtml(d.references, sources)}
-
-                ${d.learnMore ? `
-                    <div class="entry-learn-more">
-                        <a href="${d.learnMore.url}" target="_blank" rel="noopener noreferrer" class="learn-more-link">${d.learnMore.text} →</a>
-                    </div>
-                ` : ''}
-
-                ${renderRelatedLinks(d.related, glossary, { filterDomain: false })}
-            </article>
-        `;
-    }).join('');
+            ${renderRelatedLinks(d.related, glossary, { filterDomain: false })}
+        `
+    })).join('');
 }
 
 /**
