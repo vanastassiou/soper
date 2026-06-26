@@ -13,10 +13,16 @@ import { calculateProperties, calculateFattyAcidsFromPercentages } from '../calc
 import { optimizeWeights } from './weights.js';
 import { scorePropertiesInRange } from './scoring.js';
 
+/** @typedef {import('../../lib/types.js').Fat} Fat */
+/** @typedef {import('../../lib/types.js').FatsDatabase} FatsDatabase */
+/** @typedef {import('../../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../../lib/types.js').PropertyValues} PropertyValues */
+
+
 /**
  * Generate a random recipe with properties in acceptable ranges
- * @param {Object} fatsDatabase - Fat database
- * @param {Object} options - {excludeFats, lockedFats (IDs only), minFats, maxFats, maxAttempts}
+ * @param {FatsDatabase} fatsDatabase - Fat database
+ * @param {Object<string, any>} options - {excludeFats, lockedFats (IDs only), minFats, maxFats, maxAttempts}
  * @returns {Object|null} {recipe, properties} or null if no valid recipe found
  */
 export function generateRandomRecipe(fatsDatabase, options = {}) {
@@ -126,9 +132,9 @@ export function generateRandomRecipe(fatsDatabase, options = {}) {
 
 /**
  * Generate random percentages for selected fats, scaled to a target total
- * @param {Array} fatIds - Array of fat IDs
+ * @param {string[]} fatIds - Array of fat IDs
  * @param {number} targetTotal - Target total percentage (e.g., 60 if 40% is locked)
- * @returns {Array} Array of {id, percentage}
+ * @returns {Array<{id: string, percentage: number}>} Array of {id, percentage}
  */
 function generateRandomPercentagesScaled(fatIds, targetTotal) {
     if (fatIds.length === 0) return [];
@@ -159,8 +165,8 @@ function generateRandomPercentagesScaled(fatIds, targetTotal) {
 /**
  * Convert property targets to approximate fatty acid targets
  * This is an inverse of calculateProperties() with assumptions
- * @param {Object} propertyTargets - {hardness: 40, degreasing: 18, ...}
- * @returns {Object} Approximate fatty acid targets
+ * @param {Object<string, any>} propertyTargets - {hardness: 40, degreasing: 18, ...}
+ * @returns {Object<string, any>} Approximate fatty acid targets
  */
 export function propertiesToFattyAcidTargets(propertyTargets) {
     const targets = {};
@@ -221,7 +227,7 @@ export function propertiesToFattyAcidTargets(propertyTargets) {
 
 /**
  * Validate property targets for logical consistency
- * @param {Object} targets - Property targets
+ * @param {Object<string, any>} targets - Property targets
  * @returns {string|null} Error message or null if valid
  */
 export function validatePropertyTargets(targets) {

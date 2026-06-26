@@ -9,13 +9,17 @@
 
 import { PROFILE, PROPERTY_RANGES, isValidTarget } from '../../lib/constants.js';
 
+/** @typedef {import('../../lib/types.js').Fat} Fat */
+/** @typedef {import('../../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../../lib/types.js').PropertyValues} PropertyValues */
+
 const RANGE_PROPERTIES = ['hardness', 'degreasing', 'moisturizing', 'lather-volume', 'lather-density'];
 
 /**
  * Calculate error between current and target fatty acid profiles
  * Uses sum of squared differences for specified targets only
- * @param {Object} current - Current fatty acid profile
- * @param {Object} target - Target fatty acid percentages (only specified keys are compared)
+ * @param {FattyAcids} current - Current fatty acid profile
+ * @param {Object<string, any>} target - Target fatty acid percentages (only specified keys are compared)
  * @returns {number} Sum of squared differences
  */
 export function calculateProfileError(current, target) {
@@ -33,9 +37,9 @@ export function calculateProfileError(current, target) {
 /**
  * Score a fat by how well it can help achieve target profile
  * Higher score = more helpful
- * @param {Object} fat - Fat data
- * @param {Object} targetProfile - Target fatty acid percentages
- * @param {Object} currentProfile - Current achieved profile (can be empty)
+ * @param {Fat} fat - Fat data
+ * @param {Object<string, any>} targetProfile - Target fatty acid percentages
+ * @param {FattyAcids} currentProfile - Current achieved profile (can be empty)
  * @returns {number} Score (higher is better)
  */
 export function scoreFatForTarget(fat, targetProfile, currentProfile = {}) {
@@ -65,8 +69,8 @@ export function scoreFatForTarget(fat, targetProfile, currentProfile = {}) {
 
 /**
  * Calculate match quality as percentage
- * @param {Object} achieved - Achieved fatty acid profile
- * @param {Object} target - Target profile
+ * @param {FattyAcids} achieved - Achieved fatty acid profile
+ * @param {Object<string, any>} target - Target profile
  * @returns {number} Match quality 0-100
  */
 export function calculateMatchQuality(achieved, target) {
@@ -89,9 +93,9 @@ export function calculateMatchQuality(achieved, target) {
 
 /**
  * Score a fat by how well it improves out-of-range properties
- * @param {Object} fat - Fat data with fattyAcids
- * @param {Object} currentProperties - Current calculated properties
- * @param {Object} propertyRanges - PROPERTY_RANGES object
+ * @param {Fat} fat - Fat data with fattyAcids
+ * @param {PropertyValues} currentProperties - Current calculated properties
+ * @param {Object<string, {min: number, max: number}>} propertyRanges - PROPERTY_RANGES object
  * @returns {number} Score (higher = better improvement potential)
  */
 export function scoreFatForPropertyImprovement(fat, currentProperties, propertyRanges) {
@@ -133,14 +137,15 @@ export function scoreFatForPropertyImprovement(fat, currentProperties, propertyR
 
 /**
  * Score how well properties are within ranges (higher = better)
- * @param {Object} properties - Calculated properties
+ * @param {PropertyValues} properties - Calculated properties
  * @returns {number} Score
  */
 export function scorePropertiesInRange(properties) {
     let score = 0;
+    const ranges = /** @type {Object<string, {min: number, max: number}>} */ (PROPERTY_RANGES);
 
     for (const prop of RANGE_PROPERTIES) {
-        const range = PROPERTY_RANGES[prop];
+        const range = ranges[prop];
         const val = properties[prop] || 0;
 
         if (val >= range.min && val <= range.max) {

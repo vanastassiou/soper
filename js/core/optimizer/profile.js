@@ -8,12 +8,19 @@ import { calculateFattyAcidsFromPercentages, calculateProperties } from '../calc
 import { calculateProfileError, calculateMatchQuality, scoreFatForTarget } from './scoring.js';
 import { optimizeWeights } from './weights.js';
 
+/** @typedef {import('../../lib/types.js').Fat} Fat */
+/** @typedef {import('../../lib/types.js').ScoredFat} ScoredFat */
+/** @typedef {import('../../lib/types.js').FatsDatabase} FatsDatabase */
+/** @typedef {import('../../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../../lib/types.js').PropertyValues} PropertyValues */
+
+
 /**
  * Filter and score available fats for profile matching
- * @param {Object} fatsDatabase - All available fats
- * @param {Set} excludeFats - Fat IDs to exclude
- * @param {Set} lockedIds - Locked fat IDs (handled separately)
- * @returns {Array} Array of fat objects with id included
+ * @param {FatsDatabase} fatsDatabase - All available fats
+ * @param {Set<string>} excludeFats - Fat IDs to exclude
+ * @param {Set<string>} lockedIds - Locked fat IDs (handled separately)
+ * @returns {ScoredFat[]} Array of fat objects with id included
  */
 function filterAvailableFats(fatsDatabase, excludeFats, lockedIds) {
     return Object.entries(fatsDatabase)
@@ -23,10 +30,10 @@ function filterAvailableFats(fatsDatabase, excludeFats, lockedIds) {
 
 /**
  * Score and rank fats based on target profile
- * @param {Array} availableFats - Available fat objects
- * @param {Object} targetProfile - Target fatty acid profile
- * @param {Array} selectedFatIds - Already selected fat IDs to exclude
- * @returns {Array} Scored and sorted fat array
+ * @param {ScoredFat[]} availableFats - Available fat objects
+ * @param {Object<string, any>} targetProfile - Target fatty acid profile
+ * @param {string[]} selectedFatIds - Already selected fat IDs to exclude
+ * @returns {ScoredFat[]} Scored and sorted fat array
  */
 function scoreAndRankFats(availableFats, targetProfile, selectedFatIds) {
     return availableFats
@@ -40,12 +47,12 @@ function scoreAndRankFats(availableFats, targetProfile, selectedFatIds) {
 
 /**
  * Find the next best fat to add using improvement scoring
- * @param {Array} scoredFats - Available fats with scores
- * @param {Array} selectedFatIds - Currently selected fat IDs
- * @param {Object} targetProfile - Target fatty acid profile
- * @param {Object} fatsDatabase - Fat database
- * @param {Object} weightOptions - {minFatPercent, maxFatPercent}
- * @returns {{fat: Object|null, improvement: number}} Best fat and its improvement
+ * @param {ScoredFat[]} scoredFats - Available fats with scores
+ * @param {string[]} selectedFatIds - Currently selected fat IDs
+ * @param {Object<string, any>} targetProfile - Target fatty acid profile
+ * @param {FatsDatabase} fatsDatabase - Fat database
+ * @param {Object<string, any>} weightOptions - {minFatPercent, maxFatPercent}
+ * @returns {{fat: (ScoredFat|null), improvement: number}} Best fat and its improvement
  */
 function findBestFatToAdd(scoredFats, selectedFatIds, targetProfile, fatsDatabase, weightOptions) {
     const currentRecipe = selectedFatIds.map(id => ({
@@ -82,12 +89,12 @@ function findBestFatToAdd(scoredFats, selectedFatIds, targetProfile, fatsDatabas
 
 /**
  * Greedy fat selection: iteratively add fats that improve profile match
- * @param {Array} scoredFats - Scored and ranked available fats (mutated)
- * @param {Array} selectedFatIds - Initially selected fat IDs (mutated)
+ * @param {ScoredFat[]} scoredFats - Scored and ranked available fats (mutated)
+ * @param {string[]} selectedFatIds - Initially selected fat IDs (mutated)
  * @param {number} availableSlots - Max fats to select
- * @param {Object} targetProfile - Target fatty acid profile
- * @param {Object} fatsDatabase - Fat database
- * @param {Object} weightOptions - {minFatPercent, maxFatPercent}
+ * @param {Object<string, any>} targetProfile - Target fatty acid profile
+ * @param {FatsDatabase} fatsDatabase - Fat database
+ * @param {Object<string, any>} weightOptions - {minFatPercent, maxFatPercent}
  */
 function greedySelectFats(scoredFats, selectedFatIds, availableSlots, targetProfile, fatsDatabase, weightOptions) {
     while (selectedFatIds.length < availableSlots && scoredFats.length > 0) {
@@ -107,13 +114,13 @@ function greedySelectFats(scoredFats, selectedFatIds, availableSlots, targetProf
 
 /**
  * Build final optimized recipe with locked fats first
- * @param {Array} allFatIds - All fat IDs (locked + selected)
- * @param {Array} lockedFats - Array of {id, percentage}
- * @param {Set} lockedIds - Set of locked fat IDs
- * @param {Object} targetProfile - Target fatty acid profile
- * @param {Object} fatsDatabase - Fat database
- * @param {Object} weightOptions - {minFatPercent, maxFatPercent}
- * @returns {Object} {recipe, achieved, achievedProperties, error, matchQuality}
+ * @param {string[]} allFatIds - All fat IDs (locked + selected)
+ * @param {Array<{id: string, percentage: number}>} lockedFats - Array of {id, percentage}
+ * @param {Set<string>} lockedIds - Set of locked fat IDs
+ * @param {Object<string, any>} targetProfile - Target fatty acid profile
+ * @param {FatsDatabase} fatsDatabase - Fat database
+ * @param {Object<string, any>} weightOptions - {minFatPercent, maxFatPercent}
+ * @returns {Object<string, any>} {recipe, achieved, achievedProperties, error, matchQuality}
  */
 function buildFinalResult(allFatIds, lockedFats, lockedIds, targetProfile, fatsDatabase, weightOptions) {
     const finalRecipe = optimizeWeights(allFatIds, targetProfile, fatsDatabase, weightOptions);
@@ -140,10 +147,10 @@ function buildFinalResult(allFatIds, lockedFats, lockedIds, targetProfile, fatsD
 
 /**
  * Find fats that best match target fatty acid profile
- * @param {Object} targetProfile - {oleic: 50, palmitic: 20, ...} - target percentages
- * @param {Object} fatsDatabase - All available fats
- * @param {Object} options - {maxFats, excludeFats, requireFats, lockedFats, minFatPercent, maxFatPercent}
- * @returns {Object} {recipe, achieved, achievedProperties, error, matchQuality}
+ * @param {Object<string, any>} targetProfile - {oleic: 50, palmitic: 20, ...} - target percentages
+ * @param {FatsDatabase} fatsDatabase - All available fats
+ * @param {Object<string, any>} options - {maxFats, excludeFats, requireFats, lockedFats, minFatPercent, maxFatPercent}
+ * @returns {Object<string, any>} {recipe, achieved, achievedProperties, error, matchQuality}
  */
 export function findFatsForProfile(targetProfile, fatsDatabase, options = {}) {
     const maxFats = options.maxFats || PROFILE.DEFAULT_MAX_FATS;
@@ -155,7 +162,7 @@ export function findFatsForProfile(targetProfile, fatsDatabase, options = {}) {
         maxFatPercent: options.maxFatPercent || PROFILE.MAX_FAT_PERCENT
     };
 
-    const lockedIds = new Set(lockedFats.map(f => f.id));
+    const lockedIds = new Set(lockedFats.map((/** @type {{id: string}} */ f) => f.id));
     const availableFats = filterAvailableFats(fatsDatabase, excludeFats, lockedIds);
 
     // Start with required fats (excluding locked ones)
@@ -167,6 +174,6 @@ export function findFatsForProfile(targetProfile, fatsDatabase, options = {}) {
     greedySelectFats(scoredFats, selectedFatIds, availableSlots, targetProfile, fatsDatabase, weightOptions);
 
     // Build final result
-    const allFatIds = [...lockedFats.map(f => f.id), ...selectedFatIds];
+    const allFatIds = [...lockedFats.map((/** @type {{id: string}} */ f) => f.id), ...selectedFatIds];
     return buildFinalResult(allFatIds, lockedFats, lockedIds, targetProfile, fatsDatabase, weightOptions);
 }

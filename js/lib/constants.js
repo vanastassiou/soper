@@ -425,7 +425,7 @@ export const DATA_ATTRS = {
 
 /**
  * Create a fresh fatty acids object initialized to zeros
- * @returns {Object} Fatty acid object with all values set to 0
+ * @returns {Object<string, number>} Fatty acid object with all values set to 0
  */
 export function initFattyAcids() {
     return Object.fromEntries(FATTY_ACID_KEYS.map(acid => [acid, 0]));
@@ -453,13 +453,14 @@ export function isInRange(value, min, max) {
 
 /**
  * Check if all specified properties are within their recommended ranges
- * @param {Object} properties - Property values object
+ * @param {Object<string, number>} properties - Property values object
  * @param {Array<string>} propertyKeys - Keys to check (defaults to main soap properties)
  * @returns {boolean} True if all properties are in range
  */
 export function allPropertiesInRange(properties, propertyKeys = ['hardness', 'degreasing', 'moisturizing', 'lather-volume', 'lather-density']) {
+    const ranges = /** @type {Object<string, {min: number, max: number}>} */ (PROPERTY_RANGES);
     return propertyKeys.every(key => {
-        const range = PROPERTY_RANGES[key];
+        const range = ranges[key];
         return range && isInRange(properties[key], range.min, range.max);
     });
 }

@@ -14,7 +14,7 @@
  * Significant = any social or political concerns, or two-or-more environmental
  * concerns.
  *
- * @param {Object} item - Ingredient data object (fat, fragrance, colourant, ...)
+ * @param {Object<string, any>} item - Ingredient data object (fat, fragrance, colourant, ...)
  * @returns {boolean}
  */
 export function hasSignificantEthicalConcerns(item) {

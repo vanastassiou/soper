@@ -7,14 +7,20 @@ import { PROPERTY_RANGES, allPropertiesInRange } from '../../lib/constants.js';
 import { calculateFattyAcidsFromPercentages, calculateProperties } from '../calculator.js';
 import { scoreFatForPropertyImprovement, scorePropertiesInRange } from './scoring.js';
 
+/** @typedef {import('../../lib/types.js').Fat} Fat */
+/** @typedef {import('../../lib/types.js').FatsDatabase} FatsDatabase */
+/** @typedef {import('../../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../../lib/types.js').PropertyValues} PropertyValues */
+
+
 const RANGE_PROPERTIES = ['hardness', 'degreasing', 'moisturizing', 'lather-volume', 'lather-density'];
 
 /**
  * Suggest fats to improve a recipe with fixed base fats
- * @param {Array} baseFats - User's cupboard fats {id, weight}
- * @param {Object} fatsDatabase - Fat database
- * @param {Object} options - {excludeFats, maxSuggestions, lockedSuggestions, allowRatioAdjustments}
- * @returns {Object} {suggestions, currentProperties, improvedProperties, allInRange}
+ * @param {Array<{id: string, weight: number}>} baseFats - User's cupboard fats {id, weight}
+ * @param {FatsDatabase} fatsDatabase - Fat database
+ * @param {Object<string, any>} options - {excludeFats, maxSuggestions, lockedSuggestions, allowRatioAdjustments}
+ * @returns {Object<string, any>} {suggestions, currentProperties, improvedProperties, allInRange}
  */
 export function suggestFatsForCupboard(baseFats, fatsDatabase, options = {}) {
     const excludeFats = new Set(options.excludeFats || []);
@@ -51,7 +57,7 @@ export function suggestFatsForCupboard(baseFats, fatsDatabase, options = {}) {
 
     // Get available fats for suggestions (excluding base fats and explicit exclusions)
     const baseFatIds = new Set(baseFats.map(f => f.id));
-    const lockedIds = new Set(lockedSuggestions.map(f => f.id));
+    const lockedIds = new Set(lockedSuggestions.map((/** @type {{id: string}} */ f) => f.id));
     const availableFats = Object.entries(fatsDatabase)
         .filter(([id]) => !excludeFats.has(id) && !baseFatIds.has(id) && !lockedIds.has(id))
         .map(([id, data]) => ({ id, ...data }));
@@ -96,8 +102,9 @@ export function suggestFatsForCupboard(baseFats, fatsDatabase, options = {}) {
 
             // Score based on how many properties are now in range
             let score = 0;
+            const ranges = /** @type {Object<string, {min: number, max: number}>} */ (PROPERTY_RANGES);
             for (const prop of RANGE_PROPERTIES) {
-                const range = PROPERTY_RANGES[prop];
+                const range = ranges[prop];
                 if (testProperties[prop] >= range.min && testProperties[prop] <= range.max) {
                     score += 20;
                 } else {
@@ -120,7 +127,7 @@ export function suggestFatsForCupboard(baseFats, fatsDatabase, options = {}) {
 
         if (bestFat) {
             // Extract the suggestion's percentage from the optimized recipe
-            const suggestionEntry = bestRecipe.find(r => r.id === bestFat.id);
+            const suggestionEntry = bestRecipe?.find(r => r.id === bestFat.id);
             selectedSuggestions.push({
                 id: bestFat.id,
                 percentage: suggestionEntry?.percentage || 10
@@ -132,7 +139,7 @@ export function suggestFatsForCupboard(baseFats, fatsDatabase, options = {}) {
             };
 
             // Check if we're now in range
-            if (allPropertiesInRange(bestProperties)) {
+            if (bestProperties && allPropertiesInRange(bestProperties)) {
                 break;
             }
         } else {
@@ -191,11 +198,11 @@ export function suggestFatsForCupboard(baseFats, fatsDatabase, options = {}) {
 
 /**
  * Optimize a combined recipe of base fats and suggestions
- * @param {Array} baseRecipe - Base fats with percentages
- * @param {Array} suggestions - Suggested fats (percentages will be optimized)
- * @param {Object} fatsDatabase - Fat database
+ * @param {Array<{id: string, percentage: number}>} baseRecipe - Base fats with percentages
+ * @param {Array<{id: string, percentage: number}>} suggestions - Suggested fats (percentages will be optimized)
+ * @param {FatsDatabase} fatsDatabase - Fat database
  * @param {boolean} allowRatioAdjustments - Whether to adjust base fat ratios
- * @returns {Array} Optimized combined recipe
+ * @returns {Array<{id: string, percentage: number}>} Optimized combined recipe
  */
 function optimizeCupboardRecipe(baseRecipe, suggestions, fatsDatabase, allowRatioAdjustments) {
     // Start with base fats at 75% of total, suggestions at 25%

@@ -11,15 +11,21 @@ import { PROFILE } from '../../lib/constants.js';
 import { calculateFattyAcidsFromPercentages } from '../calculator.js';
 import { calculateProfileError } from './scoring.js';
 
+/** @typedef {import('../../lib/types.js').Fat} Fat */
+/** @typedef {import('../../lib/types.js').FatsDatabase} FatsDatabase */
+/** @typedef {import('../../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../../lib/types.js').PropertyValues} PropertyValues */
+
+
 /**
  * Optimize weights for selected fats to minimize profile error
  * Complexity: O(iterations * n^2) where n = number of fats
  *
- * @param {Array} selectedFats - Array of fat ids (kebab-case keys)
- * @param {Object} targetProfile - Target fatty acid percentages
- * @param {Object} fatsDatabase - Fat database
- * @param {Object} constraints - {minFatPercent, maxFatPercent}
- * @returns {Array} Array of {id, percentage} with optimized percentages
+ * @param {string[]} selectedFats - Array of fat ids (kebab-case keys)
+ * @param {Object<string, any>} targetProfile - Target fatty acid percentages
+ * @param {FatsDatabase} fatsDatabase - Fat database
+ * @param {Object<string, any>} constraints - {minFatPercent, maxFatPercent}
+ * @returns {Array<{id: string, percentage: number}>} Array of {id, percentage} with optimized percentages
  */
 export function optimizeWeights(selectedFats, targetProfile, fatsDatabase, constraints = {}) {
     const minPercent = constraints.minFatPercent || PROFILE.MIN_FAT_PERCENT;
@@ -81,13 +87,13 @@ export function optimizeWeights(selectedFats, targetProfile, fatsDatabase, const
 
 /**
  * Create a test recipe with one fat increased and another decreased
- * @param {Array} recipe - Current recipe
+ * @param {Array<{id: string, percentage: number}>} recipe - Current recipe
  * @param {number} increaseIdx - Index to increase
  * @param {number} decreaseIdx - Index to decrease
  * @param {number} stepSize - Amount to adjust
  * @param {number} minPercent - Minimum percentage
  * @param {number} maxPercent - Maximum percentage
- * @returns {Array} New test recipe
+ * @returns {Array<{id: string, percentage: number}>} New test recipe
  */
 function createTestRecipe(recipe, increaseIdx, decreaseIdx, stepSize, minPercent, maxPercent) {
     const testRecipe = recipe.map((r, idx) => {
@@ -109,10 +115,10 @@ function createTestRecipe(recipe, increaseIdx, decreaseIdx, stepSize, minPercent
 
 /**
  * Normalize recipe percentages to sum to 100%
- * @param {Array} recipe - Recipe to normalize
+ * @param {Array<{id: string, percentage: number}>} recipe - Recipe to normalize
  * @param {number} minPercent - Minimum percentage
  * @param {number} maxPercent - Maximum percentage
- * @returns {Array} Normalized recipe
+ * @returns {Array<{id: string, percentage: number}>} Normalized recipe
  */
 function normalizeRecipe(recipe, minPercent, maxPercent) {
     // Enforce constraints

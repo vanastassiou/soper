@@ -7,12 +7,18 @@
 
 import { hasSignificantEthicalConcerns } from '../../lib/dietary.js';
 
+/** @typedef {import('../../lib/types.js').Fat} Fat */
+/** @typedef {import('../../lib/types.js').FatsDatabase} FatsDatabase */
+/** @typedef {import('../../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../../lib/types.js').PropertyValues} PropertyValues */
+
+
 /**
  * Filter ingredients based on dietary requirements
  * Works with any ingredient database (fats, colourants, fragrances, etc.)
- * @param {Object} database - Ingredient database
- * @param {Object} dietaryFilters - {animalBased, sourcingConcerns, commonAllergens, includeExoticFats}
- * @returns {Set} Set of ingredient IDs that should be excluded
+ * @param {FatsDatabase} database - Ingredient database
+ * @param {Object<string, any>} dietaryFilters - {animalBased, sourcingConcerns, commonAllergens, includeExoticFats}
+ * @returns {Set<string>} Set of ingredient IDs that should be excluded
  */
 export function getDietaryExclusions(database, dietaryFilters = {}) {
     const exclusions = new Set();

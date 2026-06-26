@@ -1,0 +1,26 @@
+{
+  "//": "Type-checks the JSDoc with no transpilation (noEmit). The app ships as raw JS; this only enforces the contracts JSDoc already documents. Run `npm run typecheck`. Coverage is rolled out layer by layer (ARCHITECTURE_RISKS Risk 4): the pure lib/core/state layers are checked strictly today; the DOM-heavy ui/, features/, and wiring/ layers are the next ratchet step.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "js/lib/**/*.js",
+    "js/core/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "js/vendor/**",
+    "**/*.test.js",
+    "**/*.bench.js"
+  ]
+}

@@ -15,14 +15,22 @@ import {
     VOLUME
 } from '../lib/constants.js';
 
+/** @typedef {import('../lib/types.js').Fat} Fat */
+/** @typedef {import('../lib/types.js').FatsDatabase} FatsDatabase */
+/** @typedef {import('../lib/types.js').FattyAcids} FattyAcids */
+/** @typedef {import('../lib/types.js').PropertyValues} PropertyValues */
+/** @typedef {import('../lib/types.js').RecipeItem} RecipeItem */
+/** @typedef {import('../lib/types.js').WeightItem} WeightItem */
+/** @typedef {import('../lib/types.js').PercentItem} PercentItem */
+
 // ============================================
 // Core calculations
 // ============================================
 
 /**
  * Calculate lye required
- * @param {Array} recipe - Array of {id, weight} objects
- * @param {Object} fatsDatabase - Fat data with SAP values
+ * @param {WeightItem[]} recipe - Array of {id, weight} objects
+ * @param {FatsDatabase} fatsDatabase - Fat data with SAP values
  * @param {string} lyeType - 'NaOH' or 'KOH'
  * @param {number} superfat - Superfat percentage (0-20)
  * @returns {number} Lye amount in same units as fat weights
@@ -49,10 +57,10 @@ export function calculateWater(lyeAmount, waterRatio) {
 
 /**
  * Core fatty acid calculation; calculates weighted fatty acid profile
- * @param {Array} recipe - Array of {id, value} objects
- * @param {Object} fatsDatabase - Fat data with fatty acid profiles
+ * @param {Array<Object<string, any>>} recipe - Array of {id, value} objects
+ * @param {FatsDatabase} fatsDatabase - Fat data with fatty acid profiles
  * @param {string} valueKey - Property name for the value ('weight' or 'percentage')
- * @returns {Object} Weighted fatty acid percentages
+ * @returns {FattyAcids} Weighted fatty acid percentages
  */
 
 function calculateFattyAcidsCore(recipe, fatsDatabase, valueKey) {
@@ -75,9 +83,9 @@ function calculateFattyAcidsCore(recipe, fatsDatabase, valueKey) {
 
 /**
  * Calculate fatty acid profile for a recipe using weights
- * @param {Array} recipe - Array of {id, weight} objects
- * @param {Object} fatsDatabase - Fat data with fatty acid profiles
- * @returns {Object} Weighted fatty acid percentages
+ * @param {WeightItem[]} recipe - Array of {id, weight} objects
+ * @param {FatsDatabase} fatsDatabase - Fat data with fatty acid profiles
+ * @returns {FattyAcids} Weighted fatty acid percentages
  */
 export function calculateFattyAcids(recipe, fatsDatabase) {
     return calculateFattyAcidsCore(recipe, fatsDatabase, 'weight');
@@ -85,9 +93,9 @@ export function calculateFattyAcids(recipe, fatsDatabase) {
 
 /**
  * Calculate fatty acid profile for a recipe using percentages
- * @param {Array} recipe - Array of {id, percentage} objects
- * @param {Object} fatsDatabase - Fat data with fatty acid profiles
- * @returns {Object} Weighted fatty acid percentages
+ * @param {PercentItem[]} recipe - Array of {id, percentage} objects
+ * @param {FatsDatabase} fatsDatabase - Fat data with fatty acid profiles
+ * @returns {FattyAcids} Weighted fatty acid percentages
  */
 export function calculateFattyAcidsFromPercentages(recipe, fatsDatabase) {
     return calculateFattyAcidsCore(recipe, fatsDatabase, 'percentage');
@@ -95,8 +103,8 @@ export function calculateFattyAcidsFromPercentages(recipe, fatsDatabase) {
 
 /**
  * Calculate weighted average of a fat property across a recipe
- * @param {Array} recipe - Array of {id, weight} objects
- * @param {Object} fatsDatabase - Fat database
+ * @param {WeightItem[]} recipe - Array of {id, weight} objects
+ * @param {FatsDatabase} fatsDatabase - Fat database
  * @param {string} property - Property name to average (e.g., 'iodine', 'ins')
  * @returns {number} Weighted average value
  */
@@ -112,8 +120,8 @@ function calculateWeightedAverage(recipe, fatsDatabase, property) {
 
 /**
  * Calculate iodine value for a recipe
- * @param {Array} recipe - Array of {id, weight} objects
- * @param {Object} fatsDatabase - Fat data with iodine values
+ * @param {WeightItem[]} recipe - Array of {id, weight} objects
+ * @param {FatsDatabase} fatsDatabase - Fat data with iodine values
  * @returns {number} Weighted iodine value
  */
 export function calculateIodine(recipe, fatsDatabase) {
@@ -122,8 +130,8 @@ export function calculateIodine(recipe, fatsDatabase) {
 
 /**
  * Calculate INS value for a recipe
- * @param {Array} recipe - Array of {id, weight} objects
- * @param {Object} fatsDatabase - Fat data with INS values
+ * @param {WeightItem[]} recipe - Array of {id, weight} objects
+ * @param {FatsDatabase} fatsDatabase - Fat data with INS values
  * @returns {number} Weighted INS value
  */
 export function calculateINS(recipe, fatsDatabase) {
@@ -132,8 +140,8 @@ export function calculateINS(recipe, fatsDatabase) {
 
 /**
  * Calculate soap properties from fatty acid profile
- * @param {Object} fa - Fatty acid profile
- * @returns {Object} Soap properties (hardness, degreasing, etc.)
+ * @param {FattyAcids} fa - Fatty acid profile
+ * @returns {PropertyValues} Soap properties (hardness, degreasing, etc.)
  */
 export function calculateProperties(fa) {
     return {
@@ -161,8 +169,8 @@ const NUM_TO_LEVEL = ['', 'very low', 'low', 'moderate', 'high', 'very high'];
 
 /**
  * Calculate weighted soap property values from dominant fatty acids
- * @param {Object} fat - Fat object with fattyAcids percentages
- * @param {Object} fattyAcidsData - Fatty acid data with soapProperties
+ * @param {Fat} fat - Fat object with fattyAcids percentages
+ * @param {Object<string, any>} fattyAcidsData - Fatty acid data with soapProperties
  * @returns {{hardness: string, degreasing: string, lather: string, moisturizing: string}|null}
  */
 function calculateWeightedSoapProperties(fat, fattyAcidsData) {
@@ -181,7 +189,9 @@ function calculateWeightedSoapProperties(fat, fattyAcidsData) {
     let weightedHardness = 0;
     let weightedDegreasing = 0;
     let weightedMoisturizing = 0;
+    /** @type {string[]} */
     const latherDescriptions = [];
+    const levelToNum = /** @type {Object<string, number>} */ (LEVEL_TO_NUM);
 
     dominant.forEach(([acidKey, pct]) => {
         const acidData = fattyAcidsData[acidKey];
@@ -189,9 +199,9 @@ function calculateWeightedSoapProperties(fat, fattyAcidsData) {
         if (!props) return;
         totalWeight += pct;
 
-        weightedHardness += (LEVEL_TO_NUM[props.hardness] || 3) * pct;
-        weightedDegreasing += (LEVEL_TO_NUM[props.degreasing] || 3) * pct;
-        weightedMoisturizing += (LEVEL_TO_NUM[props.moisturizing] || 3) * pct;
+        weightedHardness += (levelToNum[props.hardness] || 3) * pct;
+        weightedDegreasing += (levelToNum[props.degreasing] || 3) * pct;
+        weightedMoisturizing += (levelToNum[props.moisturizing] || 3) * pct;
 
         if (props.lather && !latherDescriptions.includes(props.lather)) {
             latherDescriptions.push(props.lather);
@@ -210,8 +220,8 @@ function calculateWeightedSoapProperties(fat, fattyAcidsData) {
 
 /**
  * Get structured soap properties for a fat
- * @param {Object} fat - Fat object with fattyAcids percentages
- * @param {Object} fattyAcidsData - Fatty acid data with soapProperties
+ * @param {Fat} fat - Fat object with fattyAcids percentages
+ * @param {Object<string, any>} fattyAcidsData - Fatty acid data with soapProperties
  * @returns {{hardness: string, degreasing: string, lather: string, moisturizing: string}|null}
  */
 export function getFatSoapProperties(fat, fattyAcidsData) {
@@ -220,8 +230,8 @@ export function getFatSoapProperties(fat, fattyAcidsData) {
 
 /**
  * Generate qualitative soap properties description for a fat
- * @param {Object} fat - Fat object with fattyAcids percentages
- * @param {Object} fattyAcidsData - Fatty acid data with soapProperties
+ * @param {Fat} fat - Fat object with fattyAcids percentages
+ * @param {Object<string, any>} fattyAcidsData - Fatty acid data with soapProperties
  * @returns {string} Prose description of soap properties
  */
 export function generateFatProperties(fat, fattyAcidsData) {
@@ -256,8 +266,8 @@ export function generateFatProperties(fat, fattyAcidsData) {
 
 /**
  * Calculate estimated volume range of soap batch
- * @param {Array} recipe - [{id, weight}, ...]
- * @param {Object} fatsDatabase - Fat data with density values
+ * @param {WeightItem[]} recipe - [{id, weight}, ...]
+ * @param {FatsDatabase} fatsDatabase - Fat data with density values
  * @param {number} lyeAmount - Lye weight in grams
  * @param {number} waterAmount - Water weight in grams
  * @returns {{min: number, max: number}} Volume range in mL
@@ -293,6 +303,8 @@ export function calculateVolume(recipe, fatsDatabase, lyeAmount, waterAmount) {
 
 /**
  * Check hardness and generate note if needed
+ * @param {PropertyValues} properties
+ * @returns {Object<string, any>|null}
  */
 function checkHardness(properties) {
     const R = PROPERTY_RANGES;
@@ -316,6 +328,8 @@ function checkHardness(properties) {
 
 /**
  * Check degreasing and generate note if needed
+ * @param {PropertyValues} properties
+ * @returns {Object<string, any>|null}
  */
 function checkDegreasing(properties) {
     const T = NOTE_THRESHOLDS;
@@ -339,6 +353,9 @@ function checkDegreasing(properties) {
 
 /**
  * Check shelf stability (polyunsaturated fatty acids)
+ * @param {PropertyValues} _properties
+ * @param {FattyAcids} fa
+ * @returns {Object<string, any>|null}
  */
 function checkShelfStability(_properties, fa) {
     const T = NOTE_THRESHOLDS;
@@ -356,6 +373,9 @@ function checkShelfStability(_properties, fa) {
 
 /**
  * Check linolenic acid level
+ * @param {PropertyValues} _properties
+ * @param {FattyAcids} fa
+ * @returns {Object<string, any>|null}
  */
 function checkLinolenic(_properties, fa) {
     const T = NOTE_THRESHOLDS;
@@ -372,6 +392,8 @@ function checkLinolenic(_properties, fa) {
 
 /**
  * Check lather properties
+ * @param {PropertyValues} properties
+ * @returns {Object<string, any>|null}
  */
 function checkLather(properties) {
     const R = PROPERTY_RANGES;
@@ -388,6 +410,8 @@ function checkLather(properties) {
 
 /**
  * Check moisturizing vs hardness balance
+ * @param {PropertyValues} properties
+ * @returns {Object<string, any>|null}
  */
 function checkMoisturizingBalance(properties) {
     const T = NOTE_THRESHOLDS;
@@ -404,6 +428,10 @@ function checkMoisturizingBalance(properties) {
 
 /**
  * Check for castor oil opportunity
+ * @param {PropertyValues} properties
+ * @param {FattyAcids} _fa
+ * @param {RecipeItem[]} recipe
+ * @returns {Object<string, any>|null}
  */
 function checkCastorOpportunity(properties, _fa, recipe) {
     const T = NOTE_THRESHOLDS;
@@ -421,12 +449,16 @@ function checkCastorOpportunity(properties, _fa, recipe) {
 
 /**
  * Check if recipe is well-balanced
+ * @param {PropertyValues} properties
+ * @param {FattyAcids} fa
+ * @returns {Object<string, any>|null}
  */
 function checkGoodBalance(properties, fa) {
-    const R = PROPERTY_RANGES;
+    const R = /** @type {Object<string, {min: number, max: number}>} */ (PROPERTY_RANGES);
     const T = NOTE_THRESHOLDS;
     const polyunsaturated = fa.linoleic + fa.linolenic;
 
+    /** @param {string} prop */
     const inRange = (prop) => properties[prop] >= R[prop].min && properties[prop] <= R[prop].max;
 
     if (inRange('hardness') && inRange('degreasing') && inRange('moisturizing') &&
@@ -442,10 +474,10 @@ function checkGoodBalance(properties, fa) {
 
 /**
  * Generate recipe notes/warnings based on properties
- * @param {Object} properties - Calculated properties
- * @param {Object} fa - Fatty acid profile
- * @param {Array} recipe - Recipe array
- * @returns {Array} Array of note objects {type, icon, text}
+ * @param {PropertyValues} properties - Calculated properties
+ * @param {FattyAcids} fa - Fatty acid profile
+ * @param {RecipeItem[]} recipe - Recipe array
+ * @returns {Array<Object<string, any>>} Array of note objects {type, icon, text}
  */
 export function getRecipeNotes(properties, fa, recipe) {
     if (recipe.length === 0) return [];
@@ -472,7 +504,7 @@ export function getRecipeNotes(properties, fa, recipe) {
 
 /**
  * Calculate additive amount based on fat weight
- * @param {Object} additive - Additive data from database
+ * @param {Object<string, any>} additive - Additive data from database
  * @param {number} usagePercent - User-specified usage percentage
  * @param {number} totalFatWeight - Total weight of fats in recipe (grams)
  * @returns {number} Calculated weight in grams
@@ -491,11 +523,12 @@ export function calculateAdditiveAmount(additive, usagePercent, totalFatWeight) 
 
 /**
  * Check if additive usage exceeds safety limits
- * @param {Object} additive - Additive data
+ * @param {Object<string, any>} additive - Additive data
  * @param {number} usagePercent - User-specified usage percentage
- * @returns {Array} Array of warning objects {type, message}
+ * @returns {Array<Object<string, any>>} Array of warning objects {type, message}
  */
 export function checkAdditiveWarnings(additive, usagePercent) {
+    /** @type {Array<Object<string, any>>} */
     const warnings = [];
 
     if (!additive || !additive.safety) return warnings;
@@ -529,10 +562,10 @@ export function checkAdditiveWarnings(additive, usagePercent) {
 
 /**
  * Calculate total additives weight and breakdown
- * @param {Array} recipeAdditives - Array of {id, weight}
- * @param {Object} additivesDatabase - Additives data
+ * @param {WeightItem[]} recipeAdditives - Array of {id, weight}
+ * @param {Object<string, any>} additivesDatabase - Additives data
  * @param {number} totalFatWeight - Total fat weight (grams)
- * @returns {{totalWeight: number, breakdown: Array}}
+ * @returns {{totalWeight: number, breakdown: Array<any>}}
  */
 export function calculateAdditivesTotal(recipeAdditives, additivesDatabase, totalFatWeight) {
     const breakdown = recipeAdditives.map(item => {
@@ -550,14 +583,14 @@ export function calculateAdditivesTotal(recipeAdditives, additivesDatabase, tota
         };
     }).filter(Boolean);
 
-    const totalWeight = breakdown.reduce((sum, item) => sum + item.weight, 0);
+    const totalWeight = breakdown.reduce((sum, item) => sum + (item ? item.weight : 0), 0);
     return { totalWeight, breakdown };
 }
 
 /**
  * Calculate additive volume contribution
- * @param {Array} recipeAdditives - Additives in recipe {id, weight}
- * @param {Object} additivesDatabase - Database
+ * @param {WeightItem[]} recipeAdditives - Additives in recipe {id, weight}
+ * @param {Object<string, any>} additivesDatabase - Database
  * @returns {number} Volume in mL
  */
 export function calculateAdditiveVolume(recipeAdditives, additivesDatabase) {

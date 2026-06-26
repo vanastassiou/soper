@@ -5,9 +5,9 @@
 
 /**
  * Resolve a reference by joining with sources data
- * @param {Object} reference - Reference object with sourceId
- * @param {Object} sources - Sources database
- * @returns {Object} Enriched reference with source details
+ * @param {Object<string, any>} reference - Reference object with sourceId
+ * @param {Object<string, any>} sources - Sources database
+ * @returns {Object<string, any>} Enriched reference with source details
  */
 export function resolveReference(reference, sources) {
     const source = sources[reference.sourceId];
@@ -33,9 +33,9 @@ export function resolveReference(reference, sources) {
 
 /**
  * Resolve all references in an array
- * @param {Array} references - Array of reference objects
- * @param {Object} sources - Sources database
- * @returns {Array} Enriched references
+ * @param {Array<any>} references - Array of reference objects
+ * @param {Object<string, any>} sources - Sources database
+ * @returns {Array<any>} Enriched references
  */
 export function resolveReferences(references, sources) {
     if (!references || !Array.isArray(references)) return [];
@@ -44,9 +44,9 @@ export function resolveReferences(references, sources) {
 
 /**
  * Enrich an item with resolved references
- * @param {Object} item - Data item with references property
- * @param {Object} sources - Sources database
- * @returns {Object} Item with enriched references
+ * @param {Object<string, any>} item - Data item with references property
+ * @param {Object<string, any>} sources - Sources database
+ * @returns {Object<string, any>} Item with enriched references
  */
 export function enrichWithReferences(item, sources) {
     if (!item.references) return item;
@@ -59,6 +59,9 @@ export function enrichWithReferences(item, sources) {
 /**
  * Render a list of references as the standard entry-card footer.
  * Returns an empty string if there are no references.
+ * @param {Array<any>} references - Array of reference objects
+ * @param {Object<string, any>} sources - Sources database
+ * @returns {string} HTML
  */
 export function renderReferencesHtml(references, sources) {
     if (!references || references.length === 0) return '';

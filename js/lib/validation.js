@@ -3,14 +3,18 @@
  * Uses Ajv loaded from CDN
  */
 
+/** @type {any} */
 let ajvInstance = null;
+/** @type {Object<string, any>} */
 let validators = {};
 
 /**
  * Initialize Ajv and compile schemas
- * @param {Object} schemas - Schema objects including commonDefinitions for shared refs
+ * @param {Object<string, any>} schemas - Schema objects including commonDefinitions for shared refs
  */
 export function initValidation(schemas) {
+    // Ajv is loaded as a global via a classic <script> tag (see index.html).
+    const Ajv = /** @type {any} */ (globalThis).Ajv;
     if (typeof Ajv === 'undefined') {
         throw new Error('Ajv library not loaded. Ensure CDN script is included before this module.');
     }
@@ -39,8 +43,8 @@ export function initValidation(schemas) {
 /**
  * Validate data against schema
  * @param {string} schemaName - Schema name (e.g., 'fats', 'glossary', 'fragrances')
- * @param {Object} data - Data to validate
- * @returns {{valid: boolean, errors: Array|null}}
+ * @param {Object<string, any>} data - Data to validate
+ * @returns {{valid: boolean, errors: (Array<any>|null)}}
  */
 export function validate(schemaName, data) {
     const validator = validators[schemaName];
@@ -57,7 +61,7 @@ export function validate(schemaName, data) {
 
 /**
  * Format validation errors for display
- * @param {Array} errors - Ajv error array
+ * @param {Array<any>} errors - Ajv error array
  * @returns {string} Human-readable error message
  */
 export function formatErrors(errors) {
@@ -69,10 +73,11 @@ export function formatErrors(errors) {
 
 /**
  * Validate all data files and throw on failure (strict mode)
- * @param {Object} data - All data objects to validate against their schemas
+ * @param {Object<string, any>} data - All data objects to validate against their schemas
  * @throws {Error} If any validation fails
  */
 export function validateAllStrict(data) {
+    /** @type {Object<string, {valid: boolean, errors: (Array<any>|null)}>} */
     const results = {};
     for (const [name, dataset] of Object.entries(data)) {
         results[name] = validate(name, dataset);
@@ -83,7 +88,7 @@ export function validateAllStrict(data) {
 
     if (failures.length > 0) {
         const messages = failures.map(([name, result]) =>
-            `${name}.json validation failed:\n${formatErrors(result.errors)}`
+            `${name}.json validation failed:\n${formatErrors(result.errors || [])}`
         );
         throw new Error(`Data validation failed:\n\n${messages.join('\n\n')}`);
     }
