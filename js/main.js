@@ -4,10 +4,7 @@
  */
 
 import * as calc from './core/calculator.js';
-import * as optimizer from './core/optimizer.js';
-import { DEFAULTS, ELEMENT_IDS, PROPERTY_KEYS, PROPERTY_RANGES, UI_MESSAGES } from './lib/constants.js';
-import { hasSignificantEthicalConcerns } from './lib/dietary.js';
-import * as validation from './lib/validation.js';
+import { DEFAULTS, ELEMENT_IDS, PROPERTY_RANGES, UI_MESSAGES } from './lib/constants.js';
 import {
     addExclusion, clearRecipe,
     clearYoloRecipe, clearCupboardFats, clearPropertiesRecipe,
@@ -20,6 +17,13 @@ import { toast } from './ui/components/toast.js';
 import { $, enableTabArrowNavigation, roundWeight } from './ui/helpers.js';
 import { updatePropertiesFromFats } from './ui/properties.js';
 import * as ui from './ui/ui.js';
+import { loadData } from './loaders/dataLoader.js';
+import {
+    createDietaryFilterFn,
+    getAllIngredientDatabases,
+    getCombinedExclusions,
+    updateFatSelectWithFilters
+} from './wiring/dietaryFilters.js';
 import {
     initCupboard,
     renderCupboardFatsList,
@@ -49,7 +53,6 @@ import {
     initSelectFats,
     renderRecipeList
 } from './features/selectFats/index.js';
-import { populateFatSelect } from './features/selectFats/render.js';
 
 // ============================================
 // Shared Handlers
@@ -68,92 +71,6 @@ function createFatInfoHandler(getRecipe) {
             });
         }
     };
-}
-
-// ============================================
-// Data Loading
-// ============================================
-
-async function loadData() {
-    try {
-        // Additive databases (4 separate files by category)
-        const additiveFiles = ['fragrances', 'colourants', 'soap-performance', 'skin-care'];
-
-        const [fatsResponse, glossaryResponse, fattyAcidsResponse, tooltipsResponse, sourcesResponse, formulasResponse,
-               ...additiveResponses] = await Promise.all([
-            fetch('./data/fats.json'),
-            fetch('./data/glossary.json'),
-            fetch('./data/fatty-acids.json'),
-            fetch('./data/tooltips.json'),
-            fetch('./data/sources.json'),
-            fetch('./data/formulas.json'),
-            ...additiveFiles.map(f => fetch(`./data/${f}.json`))
-        ]);
-
-        const [fatsSchemaResponse, glossarySchemaResponse, fattyAcidsSchemaResponse, tooltipsSchemaResponse, sourcesSchemaResponse, formulasSchemaResponse,
-               commonDefinitionsSchemaResponse, ...additiveSchemaResponses] = await Promise.all([
-            fetch('./data/schemas/fats.schema.json'),
-            fetch('./data/schemas/glossary.schema.json'),
-            fetch('./data/schemas/fatty-acids.schema.json'),
-            fetch('./data/schemas/tooltips.schema.json'),
-            fetch('./data/schemas/sources.schema.json'),
-            fetch('./data/schemas/formulas.schema.json'),
-            fetch('./data/schemas/common-definitions.schema.json'),
-            ...additiveFiles.map(f => fetch(`./data/schemas/${f}.schema.json`))
-        ]);
-
-        state.fatsDatabase = await fatsResponse.json();
-        state.glossaryData = await glossaryResponse.json();
-        state.fattyAcidsData = await fattyAcidsResponse.json();
-        state.tooltipsData = await tooltipsResponse.json();
-        state.sourcesData = await sourcesResponse.json();
-        state.formulasData = await formulasResponse.json();
-
-        // Load additive databases into state
-        const additiveData = await Promise.all(additiveResponses.map(r => r.json()));
-        state.fragrancesDatabase = additiveData[0];
-        state.colourantsDatabase = additiveData[1];
-        state.soapPerformanceDatabase = additiveData[2];
-        state.skinCareDatabase = additiveData[3];
-
-        const additiveSchemas = await Promise.all(additiveSchemaResponses.map(r => r.json()));
-        const schemas = {
-            fats: await fatsSchemaResponse.json(),
-            glossary: await glossarySchemaResponse.json(),
-            fattyAcids: await fattyAcidsSchemaResponse.json(),
-            tooltips: await tooltipsSchemaResponse.json(),
-            sources: await sourcesSchemaResponse.json(),
-            formulas: await formulasSchemaResponse.json(),
-            commonDefinitions: await commonDefinitionsSchemaResponse.json(),
-            fragrances: additiveSchemas[0],
-            colourants: additiveSchemas[1],
-            soapPerformance: additiveSchemas[2],
-            skinCare: additiveSchemas[3]
-        };
-
-        validation.initValidation(schemas);
-        validation.validateAllStrict({
-            fats: state.fatsDatabase,
-            glossary: state.glossaryData,
-            fattyAcids: state.fattyAcidsData,
-            tooltips: state.tooltipsData,
-            sources: state.sourcesData,
-            formulas: state.formulasData,
-            fragrances: state.fragrancesDatabase,
-            colourants: state.colourantsDatabase,
-            soapPerformance: state.soapPerformanceDatabase,
-            skinCare: state.skinCareDatabase
-        });
-    } catch (error) {
-        console.error('Error loading or validating data:', error);
-        document.body.innerHTML = `
-            <div style="color: #ff6b6b; padding: 40px; font-family: monospace; background: #1a1a2e;">
-                <h1 style="color: #ff6b6b;">Data Loading Error</h1>
-                <pre style="white-space: pre-wrap; margin-top: 20px;">${error.message}</pre>
-            </div>
-        `;
-        throw error;
-    }
 }
 
 // ============================================
@@ -282,92 +199,6 @@ function updateExclusionUI() {
     ui.populateExcludeIngredientSelect(excludeSelect, allDatabases, state.excludedFats);
     ui.renderExcludedIngredients(state.excludedFats, allDatabases, handleRemoveExclusion);
     excludeSelect.value = '';
-}
-
-/**
- * Get all ingredient databases for exclusion filtering
- * @returns {Object} Object containing all ingredient databases
- */
-function getAllIngredientDatabases() {
-    return {
-        fats: state.fatsDatabase,
-        fragrances: state.fragrancesDatabase,
-        colourants: state.colourantsDatabase,
-        soapPerformance: state.soapPerformanceDatabase,
-        skinCare: state.skinCareDatabase
-    };
-}
-
-// ============================================
-// Dietary Filters
-// ============================================
-
-/**
- * Get the current dietary filter selections from the UI
- * @returns {Object} {animalBased, sourcingConcerns, commonAllergens, includeExoticFats}
- */
-function getDietaryFilters() {
-    return {
-        animalBased: $(ELEMENT_IDS.filterAnimalBased)?.checked || false,
-        sourcingConcerns: $(ELEMENT_IDS.filterSourcingConcerns)?.checked || false,
-        commonAllergens: $(ELEMENT_IDS.filterCommonAllergens)?.checked || false,
-        includeExoticFats: $(ELEMENT_IDS.includeExoticFats)?.checked || false
-    };
-}
-
-/**
- * Create a filter function based on current dietary filter settings and manual exclusions
- * Applies to all ingredient types (fats, colourants, fragrances, etc.)
- * @returns {Function|null} Filter function or null if no filters active
- */
-function createDietaryFilterFn() {
-    const filters = getDietaryFilters();
-    const manualExclusions = new Set(state.excludedFats);
-    const hasFilters = filters.animalBased || filters.sourcingConcerns || filters.commonAllergens;
-    const hasExclusions = manualExclusions.size > 0;
-    // Exotic fats are excluded by default (unless includeExoticFats is checked)
-    const excludeExotic = !filters.includeExoticFats;
-
-    if (!hasFilters && !hasExclusions && !excludeExotic) {
-        return null;
-    }
-
-    return (id, data) => {
-        // Check manual exclusions first
-        if (manualExclusions.has(id)) return false;
-
-        // Check dietary filters
-        const dietary = data.dietary || {};
-        if (filters.animalBased && dietary.animalBased === true) return false;
-        if (filters.sourcingConcerns && hasSignificantEthicalConcerns(data)) return false;
-        if (filters.commonAllergens && dietary.commonAllergen === true) return false;
-        // Exotic fats: exclude when NOT checked (opposite of other filters)
-        if (excludeExotic && dietary.isExotic === true) return false;
-        return true;
-    };
-}
-
-/**
- * Repopulate fat select dropdown with current dietary filters applied
- */
-function updateFatSelectWithFilters() {
-    const filterFn = createDietaryFilterFn();
-    const existingIds = state.recipe.map(f => f.id);
-    populateFatSelect($(ELEMENT_IDS.fatSelect), state.fatsDatabase, existingIds, filterFn);
-
-    // Also update exclude ingredient select
-    const allDatabases = getAllIngredientDatabases();
-    ui.populateExcludeIngredientSelect($(ELEMENT_IDS.excludeIngredientSelect), allDatabases, state.excludedFats);
-}
-
-/**
- * Get combined exclusions from manual exclusions and dietary filters
- * @returns {Array} Array of fat IDs to exclude
- */
-function getCombinedExclusions() {
-    const dietaryFilters = getDietaryFilters();
-    const dietaryExclusions = optimizer.getDietaryExclusions(state.fatsDatabase, dietaryFilters);
-    return [...state.excludedFats, ...state.suggestionExcludedFats, ...dietaryExclusions];
 }
 
 // ============================================
