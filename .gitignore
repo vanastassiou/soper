@@ -10,3 +10,6 @@
 .pre-commit-config*
 
 node_modules/
+
+# Test coverage output
+coverage/
