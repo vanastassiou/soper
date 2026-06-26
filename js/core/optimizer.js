@@ -1,5 +1,5 @@
 /**
- * Recipe optimization algorithms — public barrel.
+ * Recipe optimization algorithms: the public barrel.
  *
  * The implementation is split along its natural seams under `optimizer/`:
  *   - scoring.js     error and fat/recipe scoring functions

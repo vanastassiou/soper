@@ -47,8 +47,8 @@ function collect(dir, filter = () => true) {
 }
 
 // Static assets: cache-first. The navigation root plus every shell file the app
-// needs to boot offline. `pages/` is intentionally excluded — the fetch handler
-// serves those from the network, never the cache.
+// needs to boot offline. `pages/` is intentionally excluded; the fetch handler
+// serves those from the network instead of the cache.
 const staticAssets = [
     '/',
     '/index.html',

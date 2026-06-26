@@ -27,7 +27,7 @@ import { scorePropertiesInRange } from './scoring.js';
  */
 export function generateRandomRecipe(fatsDatabase, options = {}) {
     const excludeFats = new Set(options.excludeFats || []);
-    const lockedFatIds = options.lockedFats || []; // Array of fat IDs (presence locked, not percentage)
+    const lockedFatIds = options.lockedFats || []; // Fat IDs whose presence is locked while percentages are regenerated
     const minFats = options.minFats || 3;
     const maxFats = options.maxFats || 5;
     const maxAttempts = options.maxAttempts || 50;

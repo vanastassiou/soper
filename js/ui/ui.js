@@ -17,7 +17,7 @@ import { $, positionNearAnchor } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Re-exports: panels, exclusions, and settings live in their own modules now.
-// (ARCHITECTURE_RISKS Risk 2 — split the oversized ui.js along its seams.)
+// (ARCHITECTURE_RISKS Risk 2: split the oversized ui.js along its seams.)
 // ---------------------------------------------------------------------------
 export { renderFinalRecipe, showFinalRecipe } from './finalRecipe.js';
 export { closeAllInfoPanels } from './panels/shared.js';

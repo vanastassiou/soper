@@ -45,6 +45,7 @@ const STATIC_ASSETS = [
     '/js/lib/dietary.test.js',
     '/js/lib/references.js',
     '/js/lib/references.test.js',
+    '/js/lib/types.js',
     '/js/lib/validation.js',
     '/js/loaders/dataLoader.js',
     '/js/main.js',
