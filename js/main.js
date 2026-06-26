@@ -772,8 +772,22 @@ async function init() {
     setupFinalRecipeHandlers();
     setupCollapsibleSections();
 
-    // Auto-save on state changes
+    // Auto-save on any state change.
     state.subscribeAll(saveState);
+
+    // Observer wiring (deliberately partial). Subscribing derived views to the
+    // state that drives them means a future mutation site can't silently ship a
+    // stale view by forgetting a render call.
+    //
+    // Only focus-safe updates are wired. The Select Fats / Cupboard / Additives
+    // weight inputs intentionally update their derived displays in place on each
+    // keystroke and skip the full list re-render, because re-rendering mid-edit
+    // would drop input focus. So their list renderers are NOT auto-subscribed.
+    // calculate() only refreshes the property panel and additive amounts (never
+    // the recipe inputs), so it is safe to run on every recipe change. YOLO has
+    // no per-keystroke editing path, so its list renderer can be wired directly.
+    state.subscribe('recipe', calculate);
+    state.subscribe('yoloRecipe', renderYoloRecipe);
 
     renderRecipeList();
     calculate();
